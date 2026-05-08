@@ -2,40 +2,44 @@ const { google } = require('googleapis');
 
 /**
  * Google Sheets Service
- * จัดการการอ่าน/เขียนข้อมูลรายรับ-รายจ่ายลงบน Google Sheets
+ * จัดการการอ่าน/เขียนข้อมูลลง Google Sheets
  *
- * โครงสร้างคอลัมน์:
- * A: วันที่/เวลา
- * B: รายการ
- * C: ประเภท (รายรับ/รายจ่าย)
- * D: จำนวนเงิน
- * E: หมวดหมู่
- * F: หมายเหตุ
- * G: ช่องทาง (Telegram/LINE/Facebook)
- * H: ผู้บันทึก  ← คอลัมน์ท้ายสุด
+ * Sheet 1: รายรับ-รายจ่าย (ชีวิตประจำวัน)
+ *   คอลัมน์: วันที่/เวลา | รายการ | ประเภท | จำนวนเงิน | หมวดหมู่ | หมายเหตุ | ช่องทาง | ผู้บันทึก
+ *
+ * Sheet 2: การลงทุน (ซื้อ/ขาย หุ้น กองทุน ทองคำ คริปโต)
+ *   คอลัมน์: วันที่/เวลา | การดำเนินการ | ประเภทสินทรัพย์ | ชื่อสินทรัพย์ | จำนวนหน่วย | ราคา/หน่วย | ยอดรวม | ช่องทาง | ผู้บันทึก
  */
 
 function getAuthClient() {
-  const auth = new google.auth.GoogleAuth({
-    credentials: {
-      client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-      private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n')
-    },
-    scopes: ['https://www.googleapis.com/auth/spreadsheets']
-  });
-  return auth;
+  const privateKey = (process.env.GOOGLE_PRIVATE_KEY || '').replace(/\\n/g, '\n');
+  return new google.auth.JWT(
+    process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+    null,
+    privateKey,
+    ['https://www.googleapis.com/auth/spreadsheets']
+  );
 }
 
+function getBangkokDateString() {
+  return new Date().toLocaleString('th-TH', {
+    timeZone: 'Asia/Bangkok',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  });
+}
+
+// ============================================================
+// Sheet 1: บันทึกรายรับ-รายจ่าย (ชีวิตประจำวัน)
+// ============================================================
+
 /**
- * บันทึกรายการลง Google Sheets
- * @param {Object} data - ข้อมูลรายการ
- * @param {string} data.item        - รายการ
- * @param {string} data.type        - ประเภท (รายรับ/รายจ่าย)
- * @param {number} data.amount      - จำนวนเงิน
- * @param {string} data.category    - หมวดหมู่
- * @param {string} data.note        - หมายเหตุ (optional)
- * @param {string} data.platform    - ช่องทาง เช่น Telegram, LINE, Facebook
- * @param {string} data.recorder    - ชื่อผู้บันทึก เช่น [Telegram] @username
+ * บันทึกรายการรายรับ/รายจ่ายลง Google Sheets
+ * @param {Object} data - { item, type, amount, category, note, platform, recorder }
  */
 async function saveRecord(data) {
   const auth = getAuthClient();
@@ -43,22 +47,13 @@ async function saveRecord(data) {
   const spreadsheetId = process.env.GOOGLE_SPREADSHEET_ID;
   const sheetName = process.env.GOOGLE_SHEET_NAME || 'รายรับ-รายจ่าย';
 
-  const now = new Date();
-  const dateStr = now.toLocaleString('th-TH', {
-    timeZone: 'Asia/Bangkok',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit'
-  });
+  await ensureHeaderRow(sheets, spreadsheetId, sheetName);
 
-  // คอลัมน์ A-H
   const row = [
-    dateStr,                          // A: วันที่/เวลา
+    getBangkokDateString(),           // A: วันที่/เวลา
     data.item || 'ไม่ระบุ',           // B: รายการ
-    data.type,                        // C: ประเภท
-    data.amount || 0,                 // D: จำนวนเงิน
+    data.type || 'รายจ่าย',           // C: ประเภท
+    parseFloat(data.amount) || 0,     // D: จำนวนเงิน
     data.category || 'ทั่วไป',        // E: หมวดหมู่
     data.note || '',                  // F: หมายเหตุ
     data.platform || 'Unknown',       // G: ช่องทาง
@@ -75,13 +70,65 @@ async function saveRecord(data) {
   return { success: true, row };
 }
 
+// ============================================================
+// Sheet 2: บันทึกการซื้อ/ขายสินทรัพย์การลงทุน
+// ============================================================
+
+/**
+ * บันทึกการซื้อ/ขายสินทรัพย์การลงทุนลง Sheet แยก
+ * @param {Object} data - { action, assetType, assetName, quantity, pricePerUnit, totalAmount, platform, recorder }
+ *
+ * action      : 'ซื้อ' หรือ 'ขาย'
+ * assetType   : 'หุ้น' | 'กองทุน' | 'ทองคำ' | 'คริปโต' | 'อื่นๆ'
+ * assetName   : ชื่อสินทรัพย์ เช่น "PTT", "Bitcoin", "ทองคำ 96.5%"
+ * quantity    : จำนวนหน่วย/หุ้น/กรัม/เหรียญ
+ * pricePerUnit: ราคาต่อหน่วย (ถ้ามี)
+ * totalAmount : ยอดรวม
+ */
+async function saveInvestmentRecord(data) {
+  const auth = getAuthClient();
+  const sheets = google.sheets({ version: 'v4', auth });
+  const spreadsheetId = process.env.GOOGLE_SPREADSHEET_ID;
+  const investSheetName = process.env.GOOGLE_INVEST_SHEET_NAME || 'การลงทุน';
+
+  await ensureInvestmentHeaderRow(sheets, spreadsheetId, investSheetName);
+
+  const row = [
+    getBangkokDateString(),                    // A: วันที่/เวลา
+    data.action || 'ซื้อ',                     // B: การดำเนินการ (ซื้อ/ขาย)
+    data.assetType || 'อื่นๆ',                 // C: ประเภทสินทรัพย์
+    data.assetName || 'ไม่ระบุ',               // D: ชื่อสินทรัพย์
+    parseFloat(data.quantity) || 0,            // E: จำนวนหน่วย
+    parseFloat(data.pricePerUnit) || 0,        // F: ราคา/หน่วย
+    parseFloat(data.totalAmount) || 0,         // G: ยอดรวม (บาท)
+    data.platform || 'Unknown',                // H: ช่องทาง
+    data.recorder || 'ไม่ระบุ'                 // I: ผู้บันทึก ← คอลัมน์ท้ายสุด
+  ];
+
+  await sheets.spreadsheets.values.append({
+    spreadsheetId,
+    range: `${investSheetName}!A:I`,
+    valueInputOption: 'USER_ENTERED',
+    requestBody: { values: [row] }
+  });
+
+  console.log(`[SHEETS] Investment record saved: ${data.action} ${data.assetName} (${data.assetType})`);
+  return { success: true, row };
+}
+
+// ============================================================
+// ดูยอดคงเหลือ — รวมข้อมูลจากทุก Sheet
+// ============================================================
+
 /**
  * ดึงข้อมูลสรุปยอดรายรับ-รายจ่าย โดยรวมข้อมูลจากทุก Sheet ใน Spreadsheet
+ * (ข้าม Sheet การลงทุน เพราะเป็นคนละประเภท)
  */
 async function getBalanceSummary() {
   const auth = getAuthClient();
   const sheets = google.sheets({ version: 'v4', auth });
   const spreadsheetId = process.env.GOOGLE_SPREADSHEET_ID;
+  const investSheetName = process.env.GOOGLE_INVEST_SHEET_NAME || 'การลงทุน';
 
   // ดึงรายชื่อ Sheet ทั้งหมดใน Spreadsheet
   const metaResponse = await sheets.spreadsheets.get({ spreadsheetId });
@@ -100,8 +147,14 @@ async function getBalanceSummary() {
   let monthlyIncome = 0, monthlyExpense = 0;
   const todayItems = [];
 
-  // วนอ่านข้อมูลจากทุก Sheet
+  // วนอ่านข้อมูลจากทุก Sheet (ยกเว้น Sheet การลงทุน)
   for (const title of sheetTitles) {
+    // ข้าม Sheet การลงทุน เพราะโครงสร้างคอลัมน์ต่างกัน
+    if (title === investSheetName) {
+      console.log(`[SHEETS] Skipping investment sheet: "${title}"`);
+      continue;
+    }
+
     try {
       const response = await sheets.spreadsheets.values.get({
         spreadsheetId,
@@ -110,7 +163,6 @@ async function getBalanceSummary() {
 
       const rows = response.data.values || [];
 
-      // เริ่มจากแถวที่ 2 (ข้าม Header)
       for (let i = 1; i < rows.length; i++) {
         const row = rows[i];
         if (!row || row.length < 4) continue;
@@ -120,10 +172,8 @@ async function getBalanceSummary() {
         const rowAmount = parseFloat(row[3]) || 0;
         const rowItem = row[1] || '';
         const rowRecorder = row[7] || 'ไม่ระบุ';
-        const rowSheet = title; // ชื่อ Sheet ที่มาจาก
 
         if (isNaN(rowDate.getTime())) continue;
-        // รองรับเฉพาะ รายรับ / รายจ่าย เท่านั้น
         if (rowType !== 'รายรับ' && rowType !== 'รายจ่าย') continue;
 
         const bangkokRowDate = new Date(rowDate.toLocaleString('en-US', { timeZone: 'Asia/Bangkok' }));
@@ -140,13 +190,12 @@ async function getBalanceSummary() {
               type: rowType,
               amount: rowAmount,
               recorder: rowRecorder,
-              sheet: rowSheet
+              sheet: title
             });
           }
         }
       }
     } catch (sheetError) {
-      // ถ้า Sheet ใดอ่านไม่ได้ (เช่น ไม่มีคอลัมน์ตรงกัน) ให้ข้ามไป
       console.warn(`[SHEETS] Skipping sheet "${title}": ${sheetError.message}`);
     }
   }
@@ -158,8 +207,83 @@ async function getBalanceSummary() {
     monthlyExpense,
     balance: monthlyIncome - monthlyExpense,
     todayItems,
-    sheetsScanned: sheetTitles.length
+    sheetsScanned: sheetTitles.length - 1 // ไม่นับ Sheet การลงทุน
   };
+}
+
+// ============================================================
+// Utility: ตรวจสอบและสร้าง Header Row
+// ============================================================
+
+/**
+ * ตรวจสอบและสร้าง Header Row สำหรับ Sheet รายรับ-รายจ่าย
+ */
+async function ensureHeaderRow(sheets, spreadsheetId, sheetName) {
+  try {
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: `${sheetName}!A1:H1`
+    });
+    const firstRow = response.data.values?.[0];
+    if (!firstRow || firstRow[0] !== 'วันที่/เวลา') {
+      await sheets.spreadsheets.values.update({
+        spreadsheetId,
+        range: `${sheetName}!A1:H1`,
+        valueInputOption: 'RAW',
+        requestBody: {
+          values: [[
+            'วันที่/เวลา',   // A
+            'รายการ',        // B
+            'ประเภท',        // C
+            'จำนวนเงิน',     // D
+            'หมวดหมู่',      // E
+            'หมายเหตุ',      // F
+            'ช่องทาง',       // G
+            'ผู้บันทึก'      // H ← ท้ายสุด
+          ]]
+        }
+      });
+      console.log(`[SHEETS] Header row created for sheet: ${sheetName}`);
+    }
+  } catch (e) {
+    console.warn(`[SHEETS] Could not ensure header for "${sheetName}": ${e.message}`);
+  }
+}
+
+/**
+ * ตรวจสอบและสร้าง Header Row สำหรับ Sheet การลงทุน
+ */
+async function ensureInvestmentHeaderRow(sheets, spreadsheetId, sheetName) {
+  try {
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: `${sheetName}!A1:I1`
+    });
+    const firstRow = response.data.values?.[0];
+    if (!firstRow || firstRow[0] !== 'วันที่/เวลา') {
+      await sheets.spreadsheets.values.update({
+        spreadsheetId,
+        range: `${sheetName}!A1:I1`,
+        valueInputOption: 'RAW',
+        requestBody: {
+          values: [[
+            'วันที่/เวลา',       // A
+            'การดำเนินการ',      // B (ซื้อ/ขาย)
+            'ประเภทสินทรัพย์',   // C (หุ้น/กองทุน/ทองคำ/คริปโต/อื่นๆ)
+            'ชื่อสินทรัพย์',     // D (PTT, Bitcoin, ทองคำ 96.5%)
+            'จำนวนหน่วย',        // E
+            'ราคา/หน่วย (บาท)',  // F
+            'ยอดรวม (บาท)',      // G
+            'ช่องทาง',           // H
+            'ผู้บันทึก'          // I ← ท้ายสุด
+          ]]
+        }
+      });
+      console.log(`[SHEETS] Investment header row created for sheet: ${sheetName}`);
+    }
+  } catch (e) {
+    console.warn(`[SHEETS] Could not ensure investment header for "${sheetName}": ${e.message}`);
+  }
 }
 
 /**
@@ -181,41 +305,9 @@ async function getRecentRecords(limit = 10) {
   return data.slice(-limit).reverse();
 }
 
-/**
- * ตรวจสอบและสร้าง Header Row ถ้ายังไม่มี
- */
-async function ensureHeaderRow() {
-  const auth = getAuthClient();
-  const sheets = google.sheets({ version: 'v4', auth });
-  const spreadsheetId = process.env.GOOGLE_SPREADSHEET_ID;
-  const sheetName = process.env.GOOGLE_SHEET_NAME || 'รายรับ-รายจ่าย';
-
-  const response = await sheets.spreadsheets.values.get({
-    spreadsheetId,
-    range: `${sheetName}!A1:H1`
-  });
-
-  const firstRow = response.data.values?.[0];
-  if (!firstRow || firstRow[0] !== 'วันที่/เวลา') {
-    await sheets.spreadsheets.values.update({
-      spreadsheetId,
-      range: `${sheetName}!A1:H1`,
-      valueInputOption: 'RAW',
-      requestBody: {
-        values: [[
-          'วันที่/เวลา',    // A
-          'รายการ',         // B
-          'ประเภท',         // C
-          'จำนวนเงิน',      // D
-          'หมวดหมู่',       // E
-          'หมายเหตุ',       // F
-          'ช่องทาง',        // G
-          'ผู้บันทึก'       // H ← คอลัมน์ท้ายสุด
-        ]]
-      }
-    });
-    console.log('[SHEETS] Header row created');
-  }
-}
-
-module.exports = { saveRecord, getBalanceSummary, getRecentRecords, ensureHeaderRow };
+module.exports = {
+  saveRecord,
+  saveInvestmentRecord,
+  getBalanceSummary,
+  getRecentRecords
+};

@@ -1,30 +1,40 @@
 /**
  * Response Builder Utility
  * สร้างข้อความตอบกลับสำหรับ Dialogflow ในรูปแบบต่างๆ
- * หมวดหมู่จะมาจาก Dialogflow Entities (Income_category / Expense-category)
- * หรือจาก fallback inferCategory() ถ้า Dialogflow ไม่ส่ง Entity มา
+ *
+ * Intent mapping:
+ *   บันทึกรายรับ  → buildIncomeConfirmation()       (Entity: Income_category)
+ *   บันทึกรายจ่าย → buildExpenseConfirmation()      (Entity: Expense-category)
+ *   บันทึกการขาย  → buildSellInvestmentConfirmation() (Entity: Asset-type)
+ *   บันทึกการซื้อ  → buildBuyInvestmentConfirmation()  (Entity: Asset-type)
  */
+
+// Emoji ประจำประเภทสินทรัพย์
+const ASSET_EMOJI = {
+  'หุ้น':    '📈',
+  'กองทุน':  '💼',
+  'ทองคำ':   '🥇',
+  'คริปโต':  '🪙',
+  'อื่นๆ':   '📊'
+};
 
 /**
  * สร้าง Dialogflow Fulfillment Response
- * @param {string} text - ข้อความตอบกลับ
- * @returns {Object} Dialogflow response object
  */
 function buildDialogflowResponse(text) {
   return {
     fulfillmentMessages: [
-      {
-        text: {
-          text: [text]
-        }
-      }
+      { text: { text: [text] } }
     ]
   };
 }
 
+// ============================================================
+// รายรับ / รายจ่าย ทั่วไป
+// ============================================================
+
 /**
- * สร้างข้อความยืนยันการบันทึกรายรับ
- * หมวดหมู่มาจาก Entity: Income_category
+ * ยืนยันการบันทึกรายรับ (Entity: Income_category)
  */
 function buildIncomeConfirmation(item, amount, category) {
   return `📝 ฉันบันทึก ${item}\n` +
@@ -34,8 +44,7 @@ function buildIncomeConfirmation(item, amount, category) {
 }
 
 /**
- * สร้างข้อความยืนยันการบันทึกรายจ่าย
- * หมวดหมู่มาจาก Entity: Expense-category
+ * ยืนยันการบันทึกรายจ่าย (Entity: Expense-category)
  */
 function buildExpenseConfirmation(item, amount, category) {
   return `📝 ฉันบันทึก ${item}\n` +
@@ -44,30 +53,79 @@ function buildExpenseConfirmation(item, amount, category) {
          `✅ ให้คุณเรียบร้อยแล้ว`;
 }
 
+// ============================================================
+// การซื้อ/ขายสินทรัพย์การลงทุน
+// ============================================================
+
 /**
- * สร้างข้อความยืนยันการบันทึกการขาย
- * หมวดหมู่มาจาก Entity: Income_category
+ * ยืนยันการบันทึกการซื้อสินทรัพย์ (Entity: Asset-type)
+ * @param {string} assetName    - ชื่อสินทรัพย์ เช่น "PTT", "Bitcoin"
+ * @param {string} assetType    - ประเภท: หุ้น/กองทุน/ทองคำ/คริปโต/อื่นๆ
+ * @param {number} quantity     - จำนวนหน่วย/หุ้น/กรัม
+ * @param {number} pricePerUnit - ราคาต่อหน่วย (0 = ไม่ระบุ)
+ * @param {number} totalAmount  - ยอดรวม
  */
-function buildSaleConfirmation(item, amount, category) {
-  return `📝 ฉันบันทึก ขาย${item}\n` +
-         `📂 หมวดหมู่รายรับ: ${category} 🛍️\n\n` +
-         `💵 จำนวน ${formatAmount(amount)} บาท\n\n` +
-         `✅ ให้คุณเรียบร้อยแล้ว`;
+function buildBuyInvestmentConfirmation(assetName, assetType, quantity, pricePerUnit, totalAmount) {
+  const emoji = ASSET_EMOJI[assetType] || '📊';
+  const unitLabel = getUnitLabel(assetType);
+
+  let lines = [];
+  lines.push(`📝 ฉันบันทึก ซื้อ${assetType}`);
+  lines.push(`${emoji} สินทรัพย์: ${assetName}`);
+  lines.push(`📂 ประเภท: ${assetType}`);
+  lines.push('');
+
+  if (quantity > 0) {
+    lines.push(`📦 จำนวน: ${formatQuantity(quantity, assetType)} ${unitLabel}`);
+  }
+  if (pricePerUnit > 0) {
+    lines.push(`💲 ราคา/หน่วย: ${formatAmount(pricePerUnit)} บาท`);
+  }
+  if (totalAmount > 0) {
+    lines.push(`💵 ยอดรวม: ${formatAmount(totalAmount)} บาท`);
+  }
+
+  lines.push('');
+  lines.push('✅ ให้คุณเรียบร้อยแล้ว');
+
+  return lines.join('\n');
 }
 
 /**
- * สร้างข้อความยืนยันการบันทึกการซื้อ
- * หมวดหมู่มาจาก Entity: Expense-category
+ * ยืนยันการบันทึกการขายสินทรัพย์ (Entity: Asset-type)
  */
-function buildPurchaseConfirmation(item, amount, category) {
-  return `📝 ฉันบันทึก ซื้อ${item}\n` +
-         `📂 หมวดหมู่รายจ่าย: ${category} 🛒\n\n` +
-         `💵 จำนวน ${formatAmount(amount)} บาท\n\n` +
-         `✅ ให้คุณเรียบร้อยแล้ว`;
+function buildSellInvestmentConfirmation(assetName, assetType, quantity, pricePerUnit, totalAmount) {
+  const emoji = ASSET_EMOJI[assetType] || '📊';
+  const unitLabel = getUnitLabel(assetType);
+
+  let lines = [];
+  lines.push(`📝 ฉันบันทึก ขาย${assetType}`);
+  lines.push(`${emoji} สินทรัพย์: ${assetName}`);
+  lines.push(`📂 ประเภท: ${assetType}`);
+  lines.push('');
+
+  if (quantity > 0) {
+    lines.push(`📦 จำนวน: ${formatQuantity(quantity, assetType)} ${unitLabel}`);
+  }
+  if (pricePerUnit > 0) {
+    lines.push(`💲 ราคา/หน่วย: ${formatAmount(pricePerUnit)} บาท`);
+  }
+  if (totalAmount > 0) {
+    lines.push(`💵 ยอดรวม: ${formatAmount(totalAmount)} บาท`);
+  }
+
+  lines.push('');
+  lines.push('✅ ให้คุณเรียบร้อยแล้ว');
+
+  return lines.join('\n');
 }
 
+// ============================================================
+// ยอดคงเหลือ
+// ============================================================
+
 /**
- * สร้างข้อความสรุปยอดคงเหลือ (รวมข้อมูลจากทุก Sheet)
+ * สรุปยอดคงเหลือ (รวมข้อมูลจากทุก Sheet ยกเว้น Sheet การลงทุน)
  */
 function buildBalanceSummary(summary) {
   const now = new Date();
@@ -104,7 +162,7 @@ function buildBalanceSummary(summary) {
 }
 
 /**
- * สร้างข้อความยืนยันการบันทึกจาก OCR
+ * ยืนยันการบันทึกจาก OCR
  */
 function buildOCRConfirmation(ocrResult, type) {
   const typeEmoji = type === 'รายรับ' ? '💰' : '🛒';
@@ -114,6 +172,41 @@ function buildOCRConfirmation(ocrResult, type) {
          `${typeEmoji} จำนวน: ${formatAmount(ocrResult.amount)} บาท\n` +
          `📂 หมวดหมู่: ${ocrResult.category || 'ทั่วไป'}\n\n` +
          `✅ บันทึกเรียบร้อยแล้ว`;
+}
+
+// ============================================================
+// Helpers
+// ============================================================
+
+/**
+ * หน่วยนับตามประเภทสินทรัพย์
+ */
+function getUnitLabel(assetType) {
+  const units = {
+    'หุ้น':   'หุ้น',
+    'กองทุน': 'หน่วย',
+    'ทองคำ':  'กรัม',
+    'คริปโต': 'เหรียญ',
+    'อื่นๆ':  'หน่วย'
+  };
+  return units[assetType] || 'หน่วย';
+}
+
+/**
+ * จัดรูปแบบจำนวนหน่วยตามประเภทสินทรัพย์
+ * ทองคำ/คริปโต แสดงทศนิยม 4 ตำแหน่ง, หุ้น/กองทุน แสดงจำนวนเต็ม
+ */
+function formatQuantity(quantity, assetType) {
+  if (assetType === 'ทองคำ' || assetType === 'คริปโต') {
+    return parseFloat(quantity).toLocaleString('th-TH', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 8
+    });
+  }
+  return parseFloat(quantity).toLocaleString('th-TH', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2
+  });
 }
 
 /**
@@ -130,8 +223,8 @@ module.exports = {
   buildDialogflowResponse,
   buildIncomeConfirmation,
   buildExpenseConfirmation,
-  buildSaleConfirmation,
-  buildPurchaseConfirmation,
+  buildBuyInvestmentConfirmation,
+  buildSellInvestmentConfirmation,
   buildBalanceSummary,
   buildOCRConfirmation,
   formatAmount
