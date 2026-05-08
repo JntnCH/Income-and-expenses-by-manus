@@ -1,6 +1,8 @@
 /**
  * Response Builder Utility
  * สร้างข้อความตอบกลับสำหรับ Dialogflow ในรูปแบบต่างๆ
+ * หมวดหมู่จะมาจาก Dialogflow Entities (Income_category / Expense-category)
+ * หรือจาก fallback inferCategory() ถ้า Dialogflow ไม่ส่ง Entity มา
  */
 
 /**
@@ -22,40 +24,44 @@ function buildDialogflowResponse(text) {
 
 /**
  * สร้างข้อความยืนยันการบันทึกรายรับ
+ * หมวดหมู่มาจาก Entity: Income_category
  */
 function buildIncomeConfirmation(item, amount, category) {
   return `📝 ฉันบันทึก ${item}\n` +
-         `📂 หมวดหมู่ ${category} 💰\n\n` +
+         `📂 หมวดหมู่รายรับ: ${category} 💰\n\n` +
          `💵 จำนวน ${formatAmount(amount)} บาท\n\n` +
          `✅ ให้คุณเรียบร้อยแล้ว`;
 }
 
 /**
  * สร้างข้อความยืนยันการบันทึกรายจ่าย
+ * หมวดหมู่มาจาก Entity: Expense-category
  */
 function buildExpenseConfirmation(item, amount, category) {
   return `📝 ฉันบันทึก ${item}\n` +
-         `📂 หมวดหมู่ ${category} 💪\n\n` +
+         `📂 หมวดหมู่รายจ่าย: ${category} 💪\n\n` +
          `💵 จำนวน ${formatAmount(amount)} บาท\n\n` +
          `✅ ให้คุณเรียบร้อยแล้ว`;
 }
 
 /**
  * สร้างข้อความยืนยันการบันทึกการขาย
+ * หมวดหมู่มาจาก Entity: Income_category
  */
 function buildSaleConfirmation(item, amount, category) {
   return `📝 ฉันบันทึก ขาย${item}\n` +
-         `📂 หมวดหมู่ ${category} 🛍️\n\n` +
+         `📂 หมวดหมู่รายรับ: ${category} 🛍️\n\n` +
          `💵 จำนวน ${formatAmount(amount)} บาท\n\n` +
          `✅ ให้คุณเรียบร้อยแล้ว`;
 }
 
 /**
  * สร้างข้อความยืนยันการบันทึกการซื้อ
+ * หมวดหมู่มาจาก Entity: Expense-category
  */
 function buildPurchaseConfirmation(item, amount, category) {
   return `📝 ฉันบันทึก ซื้อ${item}\n` +
-         `📂 หมวดหมู่ ${category} 🛒\n\n` +
+         `📂 หมวดหมู่รายจ่าย: ${category} 🛒\n\n` +
          `💵 จำนวน ${formatAmount(amount)} บาท\n\n` +
          `✅ ให้คุณเรียบร้อยแล้ว`;
 }
@@ -103,7 +109,6 @@ function buildBalanceSummary(summary) {
 function buildOCRConfirmation(ocrResult, type) {
   const typeEmoji = type === 'รายรับ' ? '💰' : '🛒';
   const typeText = type === 'รายรับ' ? 'รายรับ' : 'รายจ่าย';
-
   return `🔍 สแกน${typeText}จากสลิป/ใบเสร็จ\n\n` +
          `📝 รายการ: ${ocrResult.item || 'ไม่ระบุ'}\n` +
          `${typeEmoji} จำนวน: ${formatAmount(ocrResult.amount)} บาท\n` +
