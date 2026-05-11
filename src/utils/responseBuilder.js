@@ -148,8 +148,8 @@ function buildBalanceSummary(summary) {
     itemsText = 'ยังไม่มีรายการวันนี้';
   }
 
-  const sheetInfo = summary.sheetsScanned
-    ? `\n📋 รวมข้อมูลจาก ${summary.sheetsScanned} ชีต`
+  const sheetInfo = summary.summarySheet
+    ? `\n📋 ข้อมูลจาก Sheet: ${summary.summarySheet}`
     : '';
 
   return `📅 ยอดประจำวันที่ ${dateStr}${sheetInfo}\n\n` +

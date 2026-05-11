@@ -9,6 +9,10 @@ const { google } = require('googleapis');
  *
  * Sheet 2: การลงทุน (ซื้อ/ขาย หุ้น กองทุน ทองคำ คริปโต)
  *   คอลัมน์: วันที่/เวลา | การดำเนินการ | ประเภทสินทรัพย์ | ชื่อสินทรัพย์ | จำนวนหน่วย | ราคา/หน่วย | ยอดรวม | ช่องทาง | ผู้บันทึก
+ *
+ * Sheet สรุป: รวมทุกชีต (IMPORTRANGE รวมข้อมูลจากทุก Sheet ไว้แล้ว)
+ *   ใช้สำหรับ getBalanceSummary() อ่านชีตเดียวแทนการวนอ่านทุก Sheet
+ *   env: GOOGLE_SUMMARY_SHEET_NAME=รวมทุกชีต
  */
 
 function getAuthClient() {
@@ -117,25 +121,23 @@ async function saveInvestmentRecord(data) {
 }
 
 // ============================================================
-// ดูยอดคงเหลือ — รวมข้อมูลจากทุก Sheet
+// ดูยอดคงเหลือ — อ่านจาก Sheet "รวมทุกชีต" ชีตเดียว
 // ============================================================
 
 /**
- * ดึงข้อมูลสรุปยอดรายรับ-รายจ่าย โดยรวมข้อมูลจากทุก Sheet ใน Spreadsheet
- * (ข้าม Sheet การลงทุน เพราะเป็นคนละประเภท)
+ * ดึงข้อมูลสรุปยอดรายรับ-รายจ่าย
+ * อ่านจาก Sheet "รวมทุกชีต" ชีตเดียว ซึ่งใช้ IMPORTRANGE รวมข้อมูลจากทุก Sheet ไว้แล้ว
+ * กำหนดชื่อ Sheet ได้ผ่าน env: GOOGLE_SUMMARY_SHEET_NAME (default: รวมทุกชีต)
  */
 async function getBalanceSummary() {
   const auth = getAuthClient();
   const sheets = google.sheets({ version: 'v4', auth });
   const spreadsheetId = process.env.GOOGLE_SPREADSHEET_ID;
-  const investSheetName = process.env.GOOGLE_INVEST_SHEET_NAME || 'การลงทุน';
 
-  // ดึงรายชื่อ Sheet ทั้งหมดใน Spreadsheet
-  const metaResponse = await sheets.spreadsheets.get({ spreadsheetId });
-  const allSheets = metaResponse.data.sheets || [];
-  const sheetTitles = allSheets.map(s => s.properties.title);
+  // ชื่อ Sheet สรุปที่ใช้ IMPORTRANGE รวมข้อมูลไว้แล้ว
+  const summarySheetName = process.env.GOOGLE_SUMMARY_SHEET_NAME || 'รวมทุกชีต';
 
-  console.log(`[SHEETS] Found ${sheetTitles.length} sheet(s): ${sheetTitles.join(', ')}`);
+  console.log(`[SHEETS] Reading balance from summary sheet: "${summarySheetName}"`);
 
   const now = new Date();
   const bangkokNow = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Bangkok' }));
@@ -147,56 +149,45 @@ async function getBalanceSummary() {
   let monthlyIncome = 0, monthlyExpense = 0;
   const todayItems = [];
 
-  // วนอ่านข้อมูลจากทุก Sheet (ยกเว้น Sheet การลงทุน)
-  for (const title of sheetTitles) {
-    // ข้าม Sheet การลงทุน เพราะโครงสร้างคอลัมน์ต่างกัน
-    if (title === investSheetName) {
-      console.log(`[SHEETS] Skipping investment sheet: "${title}"`);
-      continue;
-    }
+  // อ่านข้อมูลจาก Sheet รวมทุกชีต ชีตเดียว
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: `${summarySheetName}!A:H`
+  });
 
-    try {
-      const response = await sheets.spreadsheets.values.get({
-        spreadsheetId,
-        range: `${title}!A:H`
-      });
+  const rows = response.data.values || [];
+  console.log(`[SHEETS] Total rows in "${summarySheetName}": ${rows.length - 1}`);
 
-      const rows = response.data.values || [];
+  // เริ่มจากแถวที่ 2 (ข้าม Header)
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+    if (!row || row.length < 4) continue;
 
-      for (let i = 1; i < rows.length; i++) {
-        const row = rows[i];
-        if (!row || row.length < 4) continue;
+    const rowDate = new Date(row[0]);
+    const rowType = row[2];
+    const rowAmount = parseFloat(row[3]) || 0;
+    const rowItem = row[1] || '';
+    const rowRecorder = row[7] || 'ไม่ระบุ';
 
-        const rowDate = new Date(row[0]);
-        const rowType = row[2];
-        const rowAmount = parseFloat(row[3]) || 0;
-        const rowItem = row[1] || '';
-        const rowRecorder = row[7] || 'ไม่ระบุ';
+    if (isNaN(rowDate.getTime())) continue;
+    if (rowType !== 'รายรับ' && rowType !== 'รายจ่าย') continue;
 
-        if (isNaN(rowDate.getTime())) continue;
-        if (rowType !== 'รายรับ' && rowType !== 'รายจ่าย') continue;
+    const bangkokRowDate = new Date(rowDate.toLocaleString('en-US', { timeZone: 'Asia/Bangkok' }));
 
-        const bangkokRowDate = new Date(rowDate.toLocaleString('en-US', { timeZone: 'Asia/Bangkok' }));
+    if (bangkokRowDate.getMonth() === todayMonth && bangkokRowDate.getFullYear() === todayYear) {
+      if (rowType === 'รายรับ') monthlyIncome += rowAmount;
+      if (rowType === 'รายจ่าย') monthlyExpense += rowAmount;
 
-        if (bangkokRowDate.getMonth() === todayMonth && bangkokRowDate.getFullYear() === todayYear) {
-          if (rowType === 'รายรับ') monthlyIncome += rowAmount;
-          if (rowType === 'รายจ่าย') monthlyExpense += rowAmount;
-
-          if (bangkokRowDate.getDate() === todayDay) {
-            if (rowType === 'รายรับ') dailyIncome += rowAmount;
-            if (rowType === 'รายจ่าย') dailyExpense += rowAmount;
-            todayItems.push({
-              item: rowItem,
-              type: rowType,
-              amount: rowAmount,
-              recorder: rowRecorder,
-              sheet: title
-            });
-          }
-        }
+      if (bangkokRowDate.getDate() === todayDay) {
+        if (rowType === 'รายรับ') dailyIncome += rowAmount;
+        if (rowType === 'รายจ่าย') dailyExpense += rowAmount;
+        todayItems.push({
+          item: rowItem,
+          type: rowType,
+          amount: rowAmount,
+          recorder: rowRecorder
+        });
       }
-    } catch (sheetError) {
-      console.warn(`[SHEETS] Skipping sheet "${title}": ${sheetError.message}`);
     }
   }
 
@@ -207,7 +198,7 @@ async function getBalanceSummary() {
     monthlyExpense,
     balance: monthlyIncome - monthlyExpense,
     todayItems,
-    sheetsScanned: sheetTitles.length - 1 // ไม่นับ Sheet การลงทุน
+    summarySheet: summarySheetName
   };
 }
 
