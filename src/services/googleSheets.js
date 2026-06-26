@@ -140,7 +140,7 @@ async function getBalanceSummary() {
   console.log(`[SHEETS] Reading balance from summary sheet: "${summarySheetName}"`);
 
   const now = new Date();
-  const bangkokNow = new Date(now.toLocaleString('th', { timeZone: 'Asia/Bangkok' }));
+  const bangkokNow = new Date(now.toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' }));
   const todayDay = bangkokNow.getDate();
   const todayMonth = bangkokNow.getMonth();
   const todayYear = bangkokNow.getFullYear();
@@ -172,7 +172,7 @@ async function getBalanceSummary() {
     if (isNaN(rowDate.getTime())) continue;
     if (rowType !== 'รายรับ' && rowType !== 'รายจ่าย') continue;
 
-    const bangkokRowDate = new Date(rowDate.toLocaleString('en-US', { timeZone: 'Asia/Bangkok' }));
+    const bangkokRowDate = new Date(rowDate.toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' }));
 
     if (bangkokRowDate.getMonth() === todayMonth && bangkokRowDate.getFullYear() === todayYear) {
       if (rowType === 'รายรับ') monthlyIncome += rowAmount;
