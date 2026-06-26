@@ -140,7 +140,7 @@ async function getBalanceSummary() {
   console.log(`[SHEETS] Reading balance from summary sheet: "${summarySheetName}"`);
 
   const now = new Date();
-  const bangkokNow = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Bangkok' }));
+  const bangkokNow = new Date(now.toLocaleString('th', { timeZone: 'Asia/Bangkok' }));
   const todayDay = bangkokNow.getDate();
   const todayMonth = bangkokNow.getMonth();
   const todayYear = bangkokNow.getFullYear();
