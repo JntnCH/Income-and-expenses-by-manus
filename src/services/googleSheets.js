@@ -169,17 +169,17 @@ async function getBalanceSummary() {
     const rowRecorder = row[7] || 'ไม่ระบุ';
 
     if (isNaN(rowDate.getTime())) continue;
-    if (rowType !== 'รายรับ' && rowType !== 'รายจ่าย') continue;
+    if (rowType !== 'income' && rowType !== 'expenses') continue;
 
     const bangkokRowDate = new Date(rowDate.toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' }));
 
     if (bangkokRowDate.getMonth() === todayMonth && bangkokRowDate.getFullYear() === todayYear) {
-      if (rowType === 'รายรับ') monthlyIncome += rowAmount;
-      if (rowType === 'รายจ่าย') monthlyExpense += rowAmount;
+      if (rowType === 'income') monthlyIncome += rowAmount;
+      if (rowType === 'expenses') monthlyExpense += rowAmount;
 
       if (bangkokRowDate.getDate() === todayDay) {
-        if (rowType === 'รายรับ') dailyIncome += rowAmount;
-        if (rowType === 'รายจ่าย') dailyExpense += rowAmount;
+        if (rowType === 'income') dailyIncome += rowAmount;
+        if (rowType === 'expenses') dailyExpense += rowAmount;
         todayItems.push({
           item: rowItem,
           type: rowType,
