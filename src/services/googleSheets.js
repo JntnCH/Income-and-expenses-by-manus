@@ -55,13 +55,12 @@ async function saveRecord(data) {
 
   const row = [
     getBangkokDateString(),           // A: วันที่/เวลา
-    data.item || 'ไม่ระบุ',           // B: รายการ
     data.type || 'รายจ่าย',           // C: ประเภท
+    data.detail || 'ไม่ระบุ',           // B: รายการ
     parseFloat(data.amount) || 0,     // D: จำนวนเงิน
     data.category || 'ทั่วไป',        // E: หมวดหมู่
-    data.note || '',                  // F: หมายเหตุ
-    data.platform || 'Unknown',       // G: ช่องทาง
-    data.recorder || 'ไม่ระบุ'        // H: ผู้บันทึก ← คอลัมน์ท้ายสุด
+    data.platform || 'Unknown',       // F: ช่องทาง
+    data.recorder || 'ไม่ระบุ'        // G: ผู้บันทึก ← คอลัมน์ท้ายสุด
   ];
 
   await sheets.spreadsheets.values.append({
@@ -224,13 +223,12 @@ async function ensureHeaderRow(sheets, spreadsheetId, sheetName) {
         requestBody: {
           values: [[
             'วันที่/เวลา',   // A
-            'รายการ',        // B
-            'ประเภท',        // C
-            'จำนวนเงิน',     // D
-            'หมวดหมู่',      // E
-            'หมายเหตุ',      // F
-            'ช่องทาง',       // G
-            'ผู้บันทึก'      // H ← ท้ายสุด
+            'ประเภท',     // B
+            'รายการ',     // C
+            'จำนวนเงิน',    // D
+            'หมวดหมู่',     // E
+            'ช่องทาง',      // G
+            'ผู้บันทึก'       // H ← ท้ายสุด
           ]]
         }
       });
