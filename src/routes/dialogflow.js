@@ -82,7 +82,7 @@ router.post('/dialogflow', async (req, res) => {
         const category = expenseCategory || inferExpenseCategory(item);
         await saveRecord({
           item,
-          type: 'expenses',
+          type: 'expense',
           amount,
           category,
           platform: userInfo.platform,
