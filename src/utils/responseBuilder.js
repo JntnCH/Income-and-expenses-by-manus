@@ -19,7 +19,7 @@ function buildDialogflowResponse(text) {
  */
 function buildIncomeConfirmation(item, amount, category) {
   return `📝 ฉันบันทึก ${item}\n` +
-         `📂 หมวดหมู่รายรับ: ${category} 💰\n\n` +
+         `📂 ประเภท รายรับ :${category} \n\n` +
          `💵 จำนวน ${formatAmount(amount)} บาท\n\n` +
          `✅ ให้คุณเรียบร้อยแล้ว`;
 }
@@ -29,7 +29,7 @@ function buildIncomeConfirmation(item, amount, category) {
  */
 function buildExpenseConfirmation(item, amount, category) {
   return `📝 ฉันบันทึก ${item}\n` +
-         `📂 หมวดหมู่รายจ่าย: ${category} 💪\n\n` +
+         `📂 ประเภท รายจ่าย : ${category}\n\n` +
          `💵 จำนวน ${formatAmount(amount)} บาท\n\n` +
          `✅ ให้คุณเรียบร้อยแล้ว`;
 }
