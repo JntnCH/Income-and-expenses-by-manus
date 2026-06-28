@@ -5,7 +5,7 @@ const { google } = require('googleapis');
  * ปรับปรุงใหม่ตามโครงสร้างที่ผู้ใช้กำหนด
  * 
  * การบันทึก (Write) ลงชีต "รายรับ-รายจ่าย":
- * A: วันที่/เวลา (28 มิ.ย. 2026 11:24:00)
+ * A: วันที่/เวลา (28/06/2026 11:24:00)
  * B: ประเภท (income, expense)
  * C: รายการ
  * D: จำนวนเงิน
@@ -29,15 +29,14 @@ function getAuthClient() {
 }
 
 /**
- * รูปแบบวันที่สำหรับแสดงผล: 27 มิ.ย. 2026
+ * รูปแบบวันที่สำหรับแสดงผล: 28/06/2026
  */
 function formatThaiDate(date) {
-  const months = [
-    'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
-    'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'
-  ];
   const d = new Date(date.toLocaleString('en-US', { timeZone: 'Asia/Bangkok' }));
-  return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
+  return `${day}/${month}/${year}`;
 }
 
 /**
@@ -48,13 +47,13 @@ function getBangkokDateString() {
   const day = String(d.getDate()).padStart(2, '0');
   const month = String(d.getMonth() + 1).padStart(2, '0');
   const year = d.getFullYear();
-
+  
   // จัดรูปแบบเวลา HH:mm:ss
   const hours = String(d.getHours()).padStart(2, '0');
   const minutes = String(d.getMinutes()).padStart(2, '0');
   const seconds = String(d.getSeconds()).padStart(2, '0');
   const time = `${hours}:${minutes}:${seconds}`;
-
+  
   return `${day}/${month}/${year} ${time}`;
 }
 
@@ -206,33 +205,34 @@ async function getBalanceSummary() {
 function parseDate(dateStr) {
   if (!dateStr) return null;
   
-  // ลบเวลาออกถ้ามี (เช่น "28 มิ.ย. 2026 11:24:00" -> "28 มิ.ย. 2026")
-  const cleanDateStr = String(dateStr).split(' ')[0] + ' ' + (String(dateStr).split(' ')[1] || '') + ' ' + (String(dateStr).split(' ')[2] || '');
-  
+  // รองรับรูปแบบ "DD/MM/YYYY" หรือ "DD/MM/YYYY HH:mm:ss"
+  const slashParts = String(dateStr).split(' ')[0].split('/');
+  if (slashParts.length === 3) {
+    const day = parseInt(slashParts[0]);
+    const month = parseInt(slashParts[1]) - 1;
+    const year = parseInt(slashParts[2]);
+    if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
+      return new Date(year, month, day);
+    }
+  }
+
+  // Fallback สำหรับรูปแบบเดิม "28 มิ.ย. 2026"
   const monthsMap = {
     'ม.ค.': 0, 'ก.พ.': 1, 'มี.ค.': 2, 'เม.ย.': 3, 'พ.ค.': 4, 'มิ.ย.': 5,
     'ก.ค.': 6, 'ส.ค.': 7, 'ก.ย.': 8, 'ต.ค.': 9, 'พ.ย.': 10, 'ธ.ค.': 11
   };
-
-  // ลองแปลงรูปแบบ "28 มิ.ย. 2026"
-  const parts = String(dateStr).split(' ');
-  if (parts.length >= 3) {
-    const day = parseInt(parts[0]);
-    const month = monthsMap[parts[1]];
-    const year = parseInt(parts[2]);
+  const spaceParts = String(dateStr).split(' ');
+  if (spaceParts.length >= 3) {
+    const day = parseInt(spaceParts[0]);
+    const month = monthsMap[spaceParts[1]];
+    const year = parseInt(spaceParts[2]);
     if (!isNaN(day) && month !== undefined && !isNaN(year)) {
       return new Date(year, month, day);
     }
   }
 
-  // Fallback สำหรับรูปแบบมาตรฐานอื่นๆ
+  // Fallback สำหรับ Date Object มาตรฐาน
   let d = new Date(dateStr);
-  if (isNaN(d.getTime())) {
-    const slashParts = String(dateStr).split('/');
-    if (slashParts.length === 3) {
-      d = new Date(slashParts[2], slashParts[1] - 1, slashParts[0]);
-    }
-  }
   return isNaN(d.getTime()) ? null : d;
 }
 
