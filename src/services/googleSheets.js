@@ -5,7 +5,7 @@ const { google } = require('googleapis');
  * ปรับปรุงใหม่ตามโครงสร้างที่ผู้ใช้กำหนด
  * 
  * การบันทึก (Write) ลงชีต "รายรับ-รายจ่าย":
- * A: วันที่/เวลา (28/06/2026 11:24:00)
+ * A: วันที่ (28/06/2026)
  * B: ประเภท (income, expense)
  * C: รายการ
  * D: จำนวนเงิน
@@ -32,14 +32,12 @@ function getAuthClient() {
  * ดึงวันเวลาปัจจุบันใน Timezone Asia/Bangkok
  */
 function getBangkokNow() {
-  // สร้าง Date object จากเวลาปัจจุบัน
   const now = new Date();
-  // แปลงเป็น String ในเขตเวลาไทย แล้วสร้าง Date object ใหม่เพื่อให้ได้ค่าปี/เดือน/วันที่ถูกต้อง
   return new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Bangkok' }));
 }
 
 /**
- * รูปแบบวันที่สำหรับแสดงผล: 28/06/2026
+ * รูปแบบวันที่สำหรับแสดงผลและบันทึก: 28/06/2026
  */
 function formatThaiDate(date) {
   const day = String(date.getDate()).padStart(2, '0');
@@ -49,20 +47,10 @@ function formatThaiDate(date) {
 }
 
 /**
- * รูปแบบวันที่สำหรับบันทึก: 28/06/2026 11:24:00
+ * ดึงเฉพาะวันที่สำหรับบันทึก: 28/06/2026
  */
 function getBangkokDateString() {
-  const d = getBangkokNow();
-  const day = String(d.getDate()).padStart(2, '0');
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const year = d.getFullYear();
-  
-  const hours = String(d.getHours()).padStart(2, '0');
-  const minutes = String(d.getMinutes()).padStart(2, '0');
-  const seconds = String(d.getSeconds()).padStart(2, '0');
-  const time = `${hours}:${minutes}:${seconds}`;
-  
-  return `${day}/${month}/${year} ${time}`;
+  return formatThaiDate(getBangkokNow());
 }
 
 async function saveRecord(data) {
@@ -78,13 +66,13 @@ async function saveRecord(data) {
   const type = typeMap[data.type] || data.type;
 
   const row = [
-    getBangkokDateString(),
-    type,
-    data.item || 'ไม่ระบุ',
-    parseFloat(data.amount) || 0,
-    data.category || 'ทั่วไป',
-    data.platform || 'Unknown',
-    data.recorder || 'ไม่ระบุ'
+    getBangkokDateString(),       // A: วันที่
+    type,                         // B: ประเภท
+    data.item || 'ไม่ระบุ',         // C: รายการ
+    parseFloat(data.amount) || 0, // D: จำนวนเงิน
+    data.category || 'ทั่วไป',     // E: หมวดหมู่
+    data.platform || 'Unknown',   // F: ช่องทาง
+    data.recorder || 'ไม่ระบุ'      // G: ผู้บันทึก
   ];
 
   await sheets.spreadsheets.values.append({
@@ -201,6 +189,7 @@ async function getBalanceSummary() {
 function parseDate(dateStr) {
   if (!dateStr) return null;
   
+  // รองรับรูปแบบ "DD/MM/YYYY" (แบบใหม่) หรือ "DD/MM/YYYY HH:mm:ss"
   const slashParts = String(dateStr).split(' ')[0].split('/');
   if (slashParts.length === 3) {
     const day = parseInt(slashParts[0]);
@@ -211,6 +200,7 @@ function parseDate(dateStr) {
     }
   }
 
+  // Fallback สำหรับรูปแบบเดิม "28 มิ.ย. 2026"
   const monthsMap = {
     'ม.ค.': 0, 'ก.พ.': 1, 'มี.ค.': 2, 'เม.ย.': 3, 'พ.ค.': 4, 'มิ.ย.': 5,
     'ก.ค.': 6, 'ส.ค.': 7, 'ก.ย.': 8, 'ต.ค.': 9, 'พ.ย.': 10, 'ธ.ค.': 11
