@@ -29,13 +29,22 @@ function getAuthClient() {
 }
 
 /**
+ * ดึงวันเวลาปัจจุบันใน Timezone Asia/Bangkok
+ */
+function getBangkokNow() {
+  // สร้าง Date object จากเวลาปัจจุบัน
+  const now = new Date();
+  // แปลงเป็น String ในเขตเวลาไทย แล้วสร้าง Date object ใหม่เพื่อให้ได้ค่าปี/เดือน/วันที่ถูกต้อง
+  return new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Bangkok' }));
+}
+
+/**
  * รูปแบบวันที่สำหรับแสดงผล: 28/06/2026
  */
 function formatThaiDate(date) {
-  const d = new Date(date.toLocaleString('en-US', { timeZone: 'Asia/Bangkok' }));
-  const day = String(d.getDate()).padStart(2, '0');
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const year = d.getFullYear();
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = date.getFullYear();
   return `${day}/${month}/${year}`;
 }
 
@@ -43,12 +52,11 @@ function formatThaiDate(date) {
  * รูปแบบวันที่สำหรับบันทึก: 28/06/2026 11:24:00
  */
 function getBangkokDateString() {
-  const d = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Bangkok' }));
+  const d = getBangkokNow();
   const day = String(d.getDate()).padStart(2, '0');
   const month = String(d.getMonth() + 1).padStart(2, '0');
   const year = d.getFullYear();
   
-  // จัดรูปแบบเวลา HH:mm:ss
   const hours = String(d.getHours()).padStart(2, '0');
   const minutes = String(d.getMinutes()).padStart(2, '0');
   const seconds = String(d.getSeconds()).padStart(2, '0');
@@ -63,22 +71,20 @@ async function saveRecord(data) {
   const spreadsheetId = process.env.GOOGLE_SPREADSHEET_ID;
   const sheetName = process.env.GOOGLE_SHEET_NAME || 'รายรับ-รายจ่าย';
 
-  // แปลงประเภทเป็นภาษาอังกฤษตามที่ผู้ใช้ต้องการ
   const typeMap = {
     'รายรับ': 'income',
     'รายจ่าย': 'expense'
   };
   const type = typeMap[data.type] || data.type;
 
-  // ลำดับคอลัมน์ A-G ตามที่ผู้ใช้กำหนดใหม่
   const row = [
-    getBangkokDateString(),       // A: วันที่/เวลา
-    type,                         // B: ประเภท (income, expense)
-    data.item || 'ไม่ระบุ',         // C: รายการ
-    parseFloat(data.amount) || 0, // D: จำนวนเงิน
-    data.category || 'ทั่วไป',     // E: หมวดหมู่
-    data.platform || 'Unknown',   // F: ช่องทาง
-    data.recorder || 'ไม่ระบุ'      // G: ผู้บันทึก
+    getBangkokDateString(),
+    type,
+    data.item || 'ไม่ระบุ',
+    parseFloat(data.amount) || 0,
+    data.category || 'ทั่วไป',
+    data.platform || 'Unknown',
+    data.recorder || 'ไม่ระบุ'
   ];
 
   await sheets.spreadsheets.values.append({
@@ -119,11 +125,6 @@ async function saveInvestmentRecord(data) {
   return { success: true, row };
 }
 
-/**
- * ดึงข้อมูลสรุปยอดจากชีต "รวมทุกชีต"
- * รายรับ: G=วันที่, H=รายการ, I=จำนวนเงิน, J=กลุ่มรายรับ
- * รายจ่าย: A=วันที่, B=รายการ, C=จำนวนเงิน, D=กลุ่มรายจ่าย
- */
 async function getBalanceSummary() {
   const auth = getAuthClient();
   const sheets = google.sheets({ version: 'v4', auth });
@@ -137,8 +138,7 @@ async function getBalanceSummary() {
 
   const rows = response.data.values || [];
   
-  const now = new Date();
-  const bangkokNow = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Bangkok' }));
+  const bangkokNow = getBangkokNow();
   const todayDay = bangkokNow.getDate();
   const todayMonth = bangkokNow.getMonth();
   const todayYear = bangkokNow.getFullYear();
@@ -147,7 +147,6 @@ async function getBalanceSummary() {
   let monthlyIncome = 0, monthlyExpense = 0;
   const todayItems = [];
 
-  // เริ่มจากแถวที่ 2 (ข้าม Header)
   for (let i = 1; i < rows.length; i++) {
     const row = rows[i];
     if (!row) continue;
@@ -199,13 +198,9 @@ async function getBalanceSummary() {
   };
 }
 
-/**
- * ช่วยแปลงวันที่จากชีตให้เป็น Date Object
- */
 function parseDate(dateStr) {
   if (!dateStr) return null;
   
-  // รองรับรูปแบบ "DD/MM/YYYY" หรือ "DD/MM/YYYY HH:mm:ss"
   const slashParts = String(dateStr).split(' ')[0].split('/');
   if (slashParts.length === 3) {
     const day = parseInt(slashParts[0]);
@@ -216,7 +211,6 @@ function parseDate(dateStr) {
     }
   }
 
-  // Fallback สำหรับรูปแบบเดิม "28 มิ.ย. 2026"
   const monthsMap = {
     'ม.ค.': 0, 'ก.พ.': 1, 'มี.ค.': 2, 'เม.ย.': 3, 'พ.ค.': 4, 'มิ.ย.': 5,
     'ก.ค.': 6, 'ส.ค.': 7, 'ก.ย.': 8, 'ต.ค.': 9, 'พ.ย.': 10, 'ธ.ค.': 11
@@ -231,7 +225,6 @@ function parseDate(dateStr) {
     }
   }
 
-  // Fallback สำหรับ Date Object มาตรฐาน
   let d = new Date(dateStr);
   return isNaN(d.getTime()) ? null : d;
 }
