@@ -89,7 +89,7 @@ async function saveRecord(data) {
   await sheets.spreadsheets.values.append({
     spreadsheetId,
     range: `${sheetName}!A:G`,
-    valueInputOption: 'USER_ENTERED',
+    valueInputOption: 'RAW',
     requestBody: { values: [row] }
   });
 
@@ -117,7 +117,7 @@ async function saveInvestmentRecord(data) {
   await sheets.spreadsheets.values.append({
     spreadsheetId,
     range: `${investSheetName}!A:I`,
-    valueInputOption: 'USER_ENTERED',
+    valueInputOption: 'RAW',
     requestBody: { values: [row] }
   });
 
