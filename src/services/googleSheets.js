@@ -41,25 +41,21 @@ function formatThaiDate(date) {
 }
 
 /**
- * รูปแบบวันที่สำหรับบันทึก: 28 มิ.ย. 2026 11:24:00
+ * รูปแบบวันที่สำหรับบันทึก: 28/06/2026 11:24:00
  */
 function getBangkokDateString() {
-  const months = [
-    'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
-    'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'
-  ];
   const d = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Bangkok' }));
-  const day = d.getDate();
-  const month = months[d.getMonth()];
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
   const year = d.getFullYear();
-  
+
   // จัดรูปแบบเวลา HH:mm:ss
   const hours = String(d.getHours()).padStart(2, '0');
   const minutes = String(d.getMinutes()).padStart(2, '0');
   const seconds = String(d.getSeconds()).padStart(2, '0');
   const time = `${hours}:${minutes}:${seconds}`;
-  
-  return `${day} ${month} ${year} ${time}`;
+
+  return `${day}/${month}/${year} ${time}`;
 }
 
 async function saveRecord(data) {
