@@ -74,8 +74,7 @@ function buildBalanceSummary(summary) {
   if (summary.todayItems && summary.todayItems.length > 0) {
     itemsText = summary.todayItems
       .map(i => {
-        const icon = i.type === 'รายรับ' ? '💰' : '💸';
-        return `${icon} ${i.item} ${formatAmount(i.amount)} บาท`;
+        return `- ${i.item} ${formatAmount(i.amount)} บาท`;
       })
       .join('\n');
   } else {
