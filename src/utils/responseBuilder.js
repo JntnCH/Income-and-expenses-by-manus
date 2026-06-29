@@ -19,7 +19,7 @@ function buildDialogflowResponse(text) {
  */
 function buildIncomeConfirmation(item, amount, category) {
   return `📝 ฉันบันทึก ${item}\n` +
-         `📂 ประเภท รายรับ :${category} \n\n` +
+         `📂 ประเภท รายรับ : ${category} \n\n` +
          `💵 จำนวน ${formatAmount(amount)} บาท\n\n` +
          `✅ ให้คุณเรียบร้อยแล้ว`;
 }
