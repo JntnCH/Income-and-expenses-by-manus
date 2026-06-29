@@ -5,7 +5,7 @@ const { google } = require('googleapis');
  * ปรับปรุงใหม่ตามโครงสร้างที่ผู้ใช้กำหนด
  * 
  * การบันทึก (Write) ลงชีต "รายรับ-รายจ่าย":
- * A: วันที่ (28/06/2026)
+ * A: วันที่ (28/6/2026)
  * B: ประเภท (income, expense)
  * C: รายการ
  * D: จำนวนเงิน
@@ -37,17 +37,17 @@ function getBangkokNow() {
 }
 
 /**
- * รูปแบบวันที่สำหรับแสดงผลและบันทึก: 28/06/2026
+ * รูปแบบวันที่สำหรับแสดงผลและบันทึก: 28/6/2026 (ไม่มี 0 นำหน้า)
  */
 function formatThaiDate(date) {
-  const day = String(date.getDate()).padStart(2, '0');
-  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = date.getDate();
+  const month = date.getMonth() + 1;
   const year = date.getFullYear();
   return `${day}/${month}/${year}`;
 }
 
 /**
- * ดึงเฉพาะวันที่สำหรับบันทึก: 28/06/2026
+ * ดึงเฉพาะวันที่สำหรับบันทึก: 28/6/2026
  */
 function getBangkokDateString() {
   return formatThaiDate(getBangkokNow());
@@ -78,7 +78,7 @@ async function saveRecord(data) {
   await sheets.spreadsheets.values.append({
     spreadsheetId,
     range: `${sheetName}!A:G`,
-    valueInputOption: 'RAW',
+    valueInputOption: 'USER_ENTERED', // เปลี่ยนกลับเป็น USER_ENTERED เพื่อลบเครื่องหมาย '
     requestBody: { values: [row] }
   });
 
@@ -106,7 +106,7 @@ async function saveInvestmentRecord(data) {
   await sheets.spreadsheets.values.append({
     spreadsheetId,
     range: `${investSheetName}!A:I`,
-    valueInputOption: 'RAW',
+    valueInputOption: 'USER_ENTERED', // เปลี่ยนกลับเป็น USER_ENTERED เพื่อลบเครื่องหมาย '
     requestBody: { values: [row] }
   });
 
@@ -189,7 +189,7 @@ async function getBalanceSummary() {
 function parseDate(dateStr) {
   if (!dateStr) return null;
   
-  // รองรับรูปแบบ "DD/MM/YYYY" (แบบใหม่) หรือ "DD/MM/YYYY HH:mm:ss"
+  // รองรับรูปแบบ "D/M/YYYY" หรือ "DD/MM/YYYY"
   const slashParts = String(dateStr).split(' ')[0].split('/');
   if (slashParts.length === 3) {
     const day = parseInt(slashParts[0]);
