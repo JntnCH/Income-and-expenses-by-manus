@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const { saveRecord, saveInvestmentRecord, getBalanceSummary } = require('../services/googleSheets');
+const { saveRecord, saveInvestmentRecord, getBalanceSummary } = require("../services/googleSheets");
+const { queryExcelData } = require("../services/excelQueryService");
 const { extractUser, formatUserLabel } = require('../utils/userExtractor');
 const {
   buildDialogflowResponse,
@@ -108,6 +109,16 @@ router.post('/dialogflow', async (req, res) => {
           responseText = buildBuyInvestmentConfirmation(assetName, assetType, quantity, pricePerUnit, totalAmount);
         } else {
           responseText = buildSellInvestmentConfirmation(assetName, assetType, quantity, pricePerUnit, totalAmount);
+        }
+        break;
+      }
+
+      case 'QueryExcel': {
+        const queryText = parameters.query || body?.queryResult?.queryText;
+        if (queryText) {
+          responseText = await queryExcelData(queryText);
+        } else {
+          responseText = "ขออภัยครับ ไม่พบคำถามที่ต้องการให้ค้นหาใน Excel";
         }
         break;
       }
