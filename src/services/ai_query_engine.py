@@ -27,7 +27,7 @@ class SmartQueryEngine:
             
         info = {
             "type": "service_account",
-            "project_id": "manus-project",
+            "project_id": "income-expenses-by-manus",
             "private_key": private_key,
             "client_email": email,
             "token_uri": "https://oauth2.googleapis.com/token",
