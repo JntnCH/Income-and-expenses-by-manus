@@ -11,9 +11,9 @@ class ExcelQueryEngine:
 
     def _load_all_excel_files(self):
         excel_files = [
-            'Copy of Income-Expanses by manus.xlsx',
-            'Copy of ค่าใช้จ่ายแต่ล่ะเดือน 📝.xlsx',
-            'Copy of หนี้ที่ค้างจ่าย 🥹.xlsx'
+            'Income-Expanses by manus',
+            'ค่าใช้จ่ายแต่ล่ะเดือน 📝',
+            'หนี้ที่ค้างจ่าย 🥹'
         ]
         
         for f in excel_files:
@@ -34,19 +34,19 @@ class ExcelQueryEngine:
                 print(f"Error loading {f}: {e}")
 
     def get_income_expense_data(self):
-        file_name = 'Copy of Income-Expanses by manus.xlsx'
+        file_name = 'Income-Expanses by manus'
         if file_name in self.data and 'รายรับ-รายจ่าย' in self.data[file_name]:
             return self.data[file_name]['รายรับ-รายจ่าย']
         return pd.DataFrame()
 
     def get_monthly_expense_data(self):
-        file_name = 'Copy of ค่าใช้จ่ายแต่ล่ะเดือน 📝.xlsx'
+        file_name = 'ค่าใช้จ่ายแต่ล่ะเดือน 📝'
         if file_name in self.data and 'Monthly-expense 2026' in self.data[file_name]: # Assuming this is the main sheet
             return self.data[file_name]['Monthly-expense 2026']
         return pd.DataFrame()
 
     def get_debt_data(self):
-        file_name = 'Copy of หนี้ที่ค้างจ่าย 🥹.xlsx'
+        file_name = 'หนี้ที่ค้างจ่าย 🥹'
         if file_name in self.data and 'หนี้ที่ค้างจ่าย' in self.data[file_name]: # Assuming this is the main sheet
             return self.data[file_name]['หนี้ที่ค้างจ่าย']
         return pd.DataFrame()
