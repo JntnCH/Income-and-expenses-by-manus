@@ -1,3 +1,4 @@
+
 import os
 import json
 import pandas as pd
@@ -10,10 +11,11 @@ from googleapiclient.discovery import build
 class SmartQueryEngine:
     def __init__(self):
         self.client = OpenAI()
+        # ดึง Spreadsheet IDs จาก Environment Variables เพื่อความปลอดภัย
         self.spreadsheet_ids = {
-            'main': '1M541e-cbFTFXMc94SANX4Svi1SK4WauehhPB3i7Wnw4',
-            'monthly': '1OFH68Lp0U70xAuRdpDb0QxGwOzTxX1VLwLYEnnur6Nc',
-            'debt': '1yPNCTj0RF9GHcOIuwLyqKECSIwF8oQ4cr2BVBidzFdU'
+            'main': os.environ.get('GOOGLE_SPREADSHEET_ID', '1M541e-cbFTFXMc94SANX4Svi1SK4WauehhPB3i7Wnw4'),
+            'monthly': os.environ.get('MONTHLY_SPREADSHEET_ID', '1OFH68Lp0U70xAuRdpDb0QxGwOzTxX1VLwLYEnnur6Nc'),
+            'debt': os.environ.get('DEBT_SPREADSHEET_ID', '1yPNCTj0RF9GHcOIuwLyqKECSIwF8oQ4cr2BVBidzFdU')
         }
         self.creds = self._get_credentials()
         self.service = build('sheets', 'v4', credentials=self.creds)
@@ -27,7 +29,7 @@ class SmartQueryEngine:
             
         info = {
             "type": "service_account",
-            "project_id": "income-expenses-by-manus",
+            "project_id": "manus-project",
             "private_key": private_key,
             "client_email": email,
             "token_uri": "https://oauth2.googleapis.com/token",
@@ -35,15 +37,18 @@ class SmartQueryEngine:
         return service_account.Credentials.from_service_account_info(info, scopes=['https://www.googleapis.com/auth/spreadsheets.readonly'])
 
     def _get_sheet_data(self, spreadsheet_id, range_name):
-        sheet = self.service.spreadsheets()
-        result = sheet.values().get(spreadsheetId=spreadsheet_id, range=range_name).execute()
-        values = result.get('values', [])
-        if not values:
+        try:
+            sheet = self.service.spreadsheets()
+            result = sheet.values().get(spreadsheetId=spreadsheet_id, range=range_name).execute()
+            values = result.get('values', [])
+            if not values:
+                return pd.DataFrame()
+            return pd.DataFrame(values[1:], columns=values[0])
+        except Exception as e:
+            print(f"Error fetching data from {spreadsheet_id}: {e}")
             return pd.DataFrame()
-        return pd.DataFrame(values[1:], columns=values[0])
 
     def analyze_query(self, query_text):
-        # Step 1: Use LLM to decide which data to fetch
         prompt = f"""
         You are an expert financial data analyst. A user asks: "{query_text}"
         Current date is {datetime.now().strftime('%d/%m/%Y')}.
@@ -107,14 +112,17 @@ class SmartQueryEngine:
             context_data = []
             for target in plan['targets']:
                 sid = self.spreadsheet_ids.get(target['spreadsheet'])
+                if not sid:
+                    continue
                 df = self._get_sheet_data(sid, target['range'])
                 if not df.empty:
-                    # Limit data size for LLM context
                     context_data.append(f"Data from {target['spreadsheet']} ({target['range']}):\n{df.tail(50).to_string()}")
+
+            if not context_data:
+                return "ไม่พบข้อมูลที่เกี่ยวข้องใน Google Sheets ของคุณครับ"
 
             full_context = "\n\n".join(context_data)
             
-            # Step 2: Use LLM to answer the question based on fetched data
             answer_prompt = f"""
             User Query: "{query_text}"
             Current Date: {datetime.now().strftime('%d/%m/%Y')}

@@ -4,11 +4,13 @@
  * ระบบวิเคราะห์ข้อมูลรายรับ-รายจ่ายและหนี้สินอัตโนมัติ
  */
 
-const GEMINI_API_KEY = "ใส่_API_KEY_ของคุณที่นี่"; // ขอได้ที่ https://aistudio.google.com/
+// ดึงค่าคงที่จาก Script Properties เพื่อความปลอดภัย
+const scriptProperties = PropertiesService.getScriptProperties();
+const GEMINI_API_KEY = scriptProperties.getProperty('GEMINI_API_KEY');
 const SPREADSHEET_IDS = {
-  main: "1M541e-cbFTFXMc94SANX4Svi1SK4WauehhPB3i7Wnw4",
-  monthly: "1OFH68Lp0U70xAuRdpDb0QxGwOzTxX1VLwLYEnnur6Nc",
-  debt: "1yPNCTj0RF9GHcOIuwLyqKECSIwF8oQ4cr2BVBidzFdU"
+  main: scriptProperties.getProperty('MAIN_SS_ID') || SpreadsheetApp.getActiveSpreadsheet().getId(),
+  monthly: scriptProperties.getProperty('MONTHLY_SS_ID'),
+  debt: scriptProperties.getProperty('DEBT_SS_ID')
 };
 
 /**
@@ -17,6 +19,10 @@ const SPREADSHEET_IDS = {
  * @return {string} คำตอบจาก AI
  */
 function askAI(query) {
+  if (!GEMINI_API_KEY) {
+    return "❌ กรุณาตั้งค่า GEMINI_API_KEY ใน Script Properties ก่อนใช้งานครับ";
+  }
+
   try {
     const dataContext = getAllSheetsContext();
     const prompt = `
@@ -46,20 +52,26 @@ function getAllSheetsContext() {
   let context = "";
   
   for (let key in SPREADSHEET_IDS) {
-    const ss = SpreadsheetApp.openById(SPREADSHEET_IDS[key]);
-    const sheets = ss.getSheets();
-    
-    context += `\n--- ไฟล์: ${ss.getName()} ---\n`;
-    sheets.forEach(sheet => {
-      const name = sheet.getName();
-      // ดึงเฉพาะ 50 แถวล่าสุดเพื่อไม่ให้ข้อมูลเยอะเกินไปสำหรับ AI
-      const lastRow = sheet.getLastRow();
-      if (lastRow > 0) {
-        const startRow = Math.max(1, lastRow - 50);
-        const data = sheet.getRange(startRow, 1, (lastRow - startRow) + 1, sheet.getLastColumn()).getValues();
-        context += `ชีต: ${name}\n${JSON.stringify(data)}\n`;
-      }
-    });
+    const id = SPREADSHEET_IDS[key];
+    if (!id) continue;
+
+    try {
+      const ss = SpreadsheetApp.openById(id);
+      const sheets = ss.getSheets();
+      
+      context += `\n--- ไฟล์: ${ss.getName()} ---\n`;
+      sheets.forEach(sheet => {
+        const name = sheet.getName();
+        const lastRow = sheet.getLastRow();
+        if (lastRow > 0) {
+          const startRow = Math.max(1, lastRow - 50);
+          const data = sheet.getRange(startRow, 1, (lastRow - startRow) + 1, sheet.getLastColumn()).getValues();
+          context += `ชีต: ${name}\n${JSON.stringify(data)}\n`;
+        }
+      });
+    } catch (e) {
+      console.warn(`Could not open spreadsheet ${key}: ${e.message}`);
+    }
   }
   
   return context;
@@ -101,6 +113,7 @@ function onOpen() {
   const ui = SpreadsheetApp.getUi();
   ui.createMenu('🤖 AI Analyst')
       .addItem('ถาม AI', 'showPrompt')
+      .addItem('⚙️ ตั้งค่าระบบ (Script Properties)', 'showSetupGuide')
       .addToUi();
 }
 
@@ -113,4 +126,14 @@ function showPrompt() {
     const answer = askAI(query);
     ui.alert('คำตอบจาก AI', answer, ui.ButtonSet.OK);
   }
+}
+
+function showSetupGuide() {
+  const ui = SpreadsheetApp.getUi();
+  const msg = "กรุณาไปที่ Project Settings (รูปฟันเฟือง) > Script Properties และเพิ่มค่าดังนี้:\n\n" +
+              "1. GEMINI_API_KEY: คีย์จาก Google AI Studio\n" +
+              "2. MAIN_SS_ID: ID ของไฟล์รายรับ-รายจ่าย\n" +
+              "3. MONTHLY_SS_ID: ID ของไฟล์ค่าใช้จ่ายรายเดือน\n" +
+              "4. DEBT_SS_ID: ID ของไฟล์หนี้สิน";
+  ui.alert('วิธีการตั้งค่า', msg, ui.ButtonSet.OK);
 }
