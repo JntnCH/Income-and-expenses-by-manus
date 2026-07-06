@@ -3,6 +3,7 @@ const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
+const { google } = require('googleapis');
 
 const dialogflowRoutes = require("./routes/dialogflow");
 const ocrRoutes = require("./routes/ocr");
@@ -25,6 +26,73 @@ const limiter = rateLimit({
   message: { error: "Too many requests, please try again later." }
 });
 app.use("/api/", limiter);
+
+// ============================================================
+// Debug Route (For Mobile Access)
+// ============================================================
+app.get("/debug-auth", async (req, res) => {
+  let logs = [];
+  const log = (msg, success = true) => logs.push(`<li style="color: ${success ? 'green' : 'red'}">${msg}</li>`);
+
+  log("=== 🔍 Google Auth Debugger ===");
+
+  const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
+  const privateKey = process.env.GOOGLE_PRIVATE_KEY;
+  const spreadsheetId = process.env.GOOGLE_SPREADSHEET_ID;
+
+  if (!email) log("❌ Error: GOOGLE_SERVICE_ACCOUNT_EMAIL is missing", false);
+  else log(`✅ Email found: ${email.substring(0, 5)}...${email.substring(email.indexOf('@'))}`);
+
+  if (!privateKey) log("❌ Error: GOOGLE_PRIVATE_KEY is missing", false);
+  else if (!privateKey.includes('BEGIN PRIVATE KEY')) log("❌ Error: GOOGLE_PRIVATE_KEY format seems wrong", false);
+  else log("✅ Private Key format looks valid");
+
+  try {
+    const auth = new google.auth.GoogleAuth({
+      credentials: {
+        client_email: email,
+        private_key: privateKey.replace(/\\n/g, '\n')
+      },
+      scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
+    });
+
+    const authClient = await auth.getClient();
+    log("✅ Authentication Successful!");
+
+    if (spreadsheetId) {
+      log(`Attempting to read Spreadsheet (ID: ${spreadsheetId.substring(0, 5)}...)...`);
+      const sheets = google.sheets({ version: 'v4', auth: authClient });
+      const response = await sheets.spreadsheets.get({ spreadsheetId });
+      log(`✅ Success! Spreadsheet Title: ${response.data.properties.title}`);
+    }
+  } catch (error) {
+    log(`❌ FAILED: ${error.message}`, false);
+    if (error.response && error.response.data) {
+      log(`Detail: ${JSON.stringify(error.response.data)}`, false);
+    }
+  }
+
+  const html = `
+    <html>
+      <head>
+        <title>Debug Google Auth</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <style>
+          body { font-family: sans-serif; padding: 20px; line-height: 1.6; }
+          h2 { color: #333; }
+          ul { background: #f4f4f4; padding: 20px; border-radius: 8px; list-style: none; }
+          li { margin-bottom: 10px; border-bottom: 1px solid #ddd; padding-bottom: 5px; word-break: break-all; }
+        </style>
+      </head>
+      <body>
+        <h2>🔍 Google Auth Debug Results</h2>
+        <ul>${logs.join('')}</ul>
+        <button onclick="location.reload()">Run Again</button>
+      </body>
+    </html>
+  `;
+  res.send(html);
+});
 
 // ============================================================
 // Routes
@@ -70,7 +138,8 @@ app.get("/", (req, res) => {
       webhook: "POST /webhook/dialogflow",
       ocr_scan: "POST /api/ocr/scan",
       ocr_providers: "GET /api/ocr/providers",
-      health: "GET /health"
+      health: "GET /health",
+      debug_auth: "GET /debug-auth"
     },
     intents: {
       "บันทึกรายรับ": "บันทึกรายรับทั่วไป (Entity: Income_category)",
