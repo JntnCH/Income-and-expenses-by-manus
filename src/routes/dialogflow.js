@@ -38,8 +38,6 @@ router.post('/dialogflow', async (req, res) => {
     const expenseCategory = extractEntity(parameters, ['Expense-category', 'expense-category']);
     
     // ดึงชื่อรายการ (item)
-    // จากไฟล์ ZIP: บันทึกรายรับใช้ "item" ที่มีค่าเป็น "$Income_category"
-    // บันทึกรายจ่ายใช้ "Expense-categoryoriginal" หรือเดาจากหมวดหมู่
     const item = parameters.item || 
                  parameters.Income_categoryoriginal || 
                  parameters['Expense-categoryoriginal'] || 
@@ -79,12 +77,16 @@ router.post('/dialogflow', async (req, res) => {
       }
 
       case 'CheckBalance': {
-        const summary = await getBalanceSummary();
-        responseText = buildBalanceSummary(summary);
+        try {
+          const summary = await getBalanceSummary();
+          responseText = buildBalanceSummary(summary);
+        } catch (err) {
+          console.error('[BALANCE ERROR]', err.message);
+          responseText = `❌ ไม่สามารถดึงยอดคงเหลือได้: ${err.message}`;
+        }
         break;
       }
 
-      // รองรับ Intent อื่นๆ ถ้ามี
       case 'บันทึกการขาย':
       case 'บันทึกการซื้อ': {
         const action = intentName.includes('ซื้อ') ? 'ซื้อ' : 'ขาย';
@@ -116,7 +118,12 @@ router.post('/dialogflow', async (req, res) => {
       case 'QueryExcel': {
         const queryText = parameters.query || body?.queryResult?.queryText;
         if (queryText) {
-          responseText = await queryExcelData(queryText);
+          try {
+            responseText = await queryExcelData(queryText);
+          } catch (err) {
+            console.error('[QUERY ERROR]', err.message);
+            responseText = `❌ AI ไม่สามารถวิเคราะห์ข้อมูลได้: ${err.message}`;
+          }
         } else {
           responseText = "ขออภัยครับ ไม่พบคำถามที่ต้องการให้ค้นหาใน Excel";
         }
@@ -132,7 +139,13 @@ router.post('/dialogflow', async (req, res) => {
 
   } catch (error) {
     console.error('[DIALOGFLOW ERROR]', error.message);
-    return res.json(buildDialogflowResponse('❌ เกิดข้อผิดพลาดในการบันทึก กรุณาลองใหม่อีกครั้ง'));
+    let errorMsg = '❌ เกิดข้อผิดพลาดในการประมวลผล';
+    if (error.message.includes('auth') || error.message.includes('grant')) {
+      errorMsg = '❌ ปัญหาการยืนยันตัวตน Google: กรุณาตรวจสอบ Service Account Key ใน .env';
+    } else if (error.message.includes('spreadsheet') || error.message.includes('found')) {
+      errorMsg = '❌ หาไฟล์ Google Sheets ไม่พบ: กรุณาตรวจสอบ ID และการ Share สิทธิ์';
+    }
+    return res.json(buildDialogflowResponse(`${errorMsg}\n(รายละเอียด: ${error.message})`));
   }
 });
 
