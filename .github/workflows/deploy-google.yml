@@ -7,7 +7,7 @@ on:
 
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-  REGION: asia-southeast1 (Singapore)   # ระบุ Region ให้ตรงกับ Artifact Registry
+  REGION: asia-southeast1  # Singapore
   REPO_NAME: income-bot-repo            # ชื่อ Repository ที่สร้างใน Artifact Registry
   SERVICE_NAME: income-expense-bot      # ชื่อบริการบน Cloud Run ที่คุณอยากให้ระบบตั้งขึ้นมา
 
@@ -46,7 +46,6 @@ jobs:
         image: ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.SERVICE_NAME }}:${{ github.sha }}
         flags: '--allow-unauthenticated'
         
-        # 👇 เพิ่มส่วนนี้เข้าไปตรงๆ เลยครับ ระบบจะจัดการผูกค่าให้เองตอนสั่งบลูพริ้นต์
         env_vars: |
           PORT=3000
           OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
