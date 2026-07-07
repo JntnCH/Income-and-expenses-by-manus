@@ -1,9 +1,15 @@
-name: Deploy Multi-Language Cloud Functions
+name: Deploy to Google Cloud Run
 
 on:
   push:
     branches:
-      - main
+      - main  # สั่งให้ทำงานเมื่อมีการ push โค้ดเข้า branch main
+
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  REGION: asia-southeast1 (Singapore)   # ระบุ Region ให้ตรงกับ Artifact Registry
+  REPO_NAME: income-bot-repo            # ชื่อ Repository ที่สร้างใน Artifact Registry
+  SERVICE_NAME: income-expense-bot      # ชื่อบริการบน Cloud Run ที่คุณอยากให้ระบบตั้งขึ้นมา
 
 jobs:
   deploy:
@@ -18,24 +24,24 @@ jobs:
       with:
         credentials_json: ${{ secrets.GCP_SA_KEY }}
 
-    # 1. Deploy ฝั่ง Node.js
-    - name: Deploy Telegram Webhook (Node.js)
-      uses: google-github-actions/deploy-cloudfunctions@v2
-      with:
-        name: telegram-bot-webhook
-        runtime: nodejs20
-        region: asia-east1
-        entry_point: telegramBotWebhook
-        # สมมติว่าโค้ด Node.js อยู่ในโฟลเดอร์ชื่อ node-bot
-        source_dir: ./node-bot 
+    - name: Set up Cloud SDK
+      uses: google-github-actions/setup-gcloud@v2
 
-    # 2. Deploy ฝั่ง Python
-    - name: Deploy Sheets Processor (Python)
-      uses: google-github-actions/deploy-cloudfunctions@v2
+    - name: Configure Docker for GCP
+      run: |
+        gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+
+    - name: Build and Push Docker Image
+      run: |
+        IMAGE_TAG="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.SERVICE_NAME }}:${{ github.sha }}"
+        docker build -t $IMAGE_TAG .
+        docker push $IMAGE_TAG
+        echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
+
+    - name: Deploy to Cloud Run
+      uses: google-github-actions/deploy-cloudrun@v2
       with:
-        name: google-sheets-processor
-        runtime: python311
-        region: asia-east1
-        entry_point: sheets_processor
-        # สมมติว่าโค้ด Python อยู่ในโฟลเดอร์ชื่อ python-service
-        source_dir: ./python-service 
+        service: ${{ env.SERVICE_NAME }}
+        region: ${{ env.REGION }}
+        image: ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.SERVICE_NAME }}:${{ github.sha }}
+        flags: '--allow-unauthenticated' # เปิดให้คนทั่วไปหรือ Webhook (Dialogflow) เรียกใช้งานได้
