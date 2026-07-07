@@ -1,0 +1,47 @@
+name: Deploy to Google Cloud Run
+
+on:
+  push:
+    branches:
+      - main  # สั่งให้ทำงานเมื่อมีการ push โค้ดเข้า branch main
+
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  REGION: asia-east1                    # ระบุ Region ให้ตรงกับ Artifact Registry
+  REPO_NAME: income-bot-repo            # ชื่อ Repository ที่สร้างใน Artifact Registry
+  SERVICE_NAME: income-expense-bot      # ชื่อบริการบน Cloud Run ที่คุณอยากให้ระบบตั้งขึ้นมา
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Authenticate to Google Cloud
+      uses: google-github-actions/auth@v2
+      with:
+        credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+    - name: Set up Cloud SDK
+      uses: google-github-actions/setup-gcloud@v2
+
+    - name: Configure Docker for GCP
+      run: |
+        gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+
+    - name: Build and Push Docker Image
+      run: |
+        IMAGE_TAG="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.SERVICE_NAME }}:${{ github.sha }}"
+        docker build -t $IMAGE_TAG .
+        docker push $IMAGE_TAG
+        echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
+
+    - name: Deploy to Cloud Run
+      uses: google-github-actions/deploy-cloudrun@v2
+      with:
+        service: ${{ env.SERVICE_NAME }}
+        region: ${{ env.REGION }}
+        image: ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.SERVICE_NAME }}:${{ github.sha }}
+        flags: '--allow-unauthenticated' # เปิดให้คนทั่วไปหรือ Webhook (Dialogflow) เรียกใช้งานได้

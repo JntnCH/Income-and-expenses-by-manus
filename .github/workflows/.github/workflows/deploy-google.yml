@@ -1,0 +1,41 @@
+name: Deploy Multi-Language Cloud Functions
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Authenticate to Google Cloud
+      uses: google-github-actions/auth@v2
+      with:
+        credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+    # 1. Deploy ฝั่ง Node.js
+    - name: Deploy Telegram Webhook (Node.js)
+      uses: google-github-actions/deploy-cloudfunctions@v2
+      with:
+        name: telegram-bot-webhook
+        runtime: nodejs20
+        region: asia-east1
+        entry_point: telegramBotWebhook
+        # สมมติว่าโค้ด Node.js อยู่ในโฟลเดอร์ชื่อ node-bot
+        source_dir: ./node-bot 
+
+    # 2. Deploy ฝั่ง Python
+    - name: Deploy Sheets Processor (Python)
+      uses: google-github-actions/deploy-cloudfunctions@v2
+      with:
+        name: google-sheets-processor
+        runtime: python311
+        region: asia-east1
+        entry_point: sheets_processor
+        # สมมติว่าโค้ด Python อยู่ในโฟลเดอร์ชื่อ python-service
+        source_dir: ./python-service 
