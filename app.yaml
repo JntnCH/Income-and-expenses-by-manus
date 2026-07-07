@@ -1,0 +1,14 @@
+runtime: nodejs20
+instance_class: F1
+
+env_variables:
+  NODE_ENV: "production"
+
+# ตั้งค่าให้รันทั้ง Node.js และเตรียมสภาพแวดล้อมสำหรับ Python
+# บน App Engine Standard, Python 3 จะมีมาให้อยู่แล้ว
+# เราจะใช้คำสั่ง start ใน package.json
+
+handlers:
+  - url: /.*
+    secure: always
+    script: auto
