@@ -46,7 +46,7 @@ jobs:
         image: asia-southeast1-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.SERVICE_NAME }}:${{ github.sha }}
         flags: '--allow-unauthenticated'
         env_vars: |
-          PORT=3000
+          PORT=8080
           OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
           GOOGLE_SPREADSHEET_ID=${{ secrets.GOOGLE_SPREADSHEET_ID }}
           GOOGLE_PRIVATE_KEY=${{ secrets.GOOGLE_PRIVATE_KEY }}
