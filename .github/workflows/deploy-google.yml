@@ -7,7 +7,7 @@ on:
 
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-  REGION: asia-east1                    # ระบุ Region ให้ตรงกับ Artifact Registry
+  REGION: asia-southeast1 (Singapore)   # ระบุ Region ให้ตรงกับ Artifact Registry
   REPO_NAME: income-bot-repo            # ชื่อ Repository ที่สร้างใน Artifact Registry
   SERVICE_NAME: income-expense-bot      # ชื่อบริการบน Cloud Run ที่คุณอยากให้ระบบตั้งขึ้นมา
 
