@@ -29,11 +29,13 @@ jobs:
 
     - name: Configure Docker for GCP
       run: |
-        gcloud auth configure-docker asia-southeast1-docker.pkg.dev --quiet
+        # เปลี่ยนมาใช้ตัวแปร REGION
+        gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
 
     - name: Build and Push Docker Image
       run: |
-        IMAGE_TAG="asia-southeast1-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.SERVICE_NAME }}:${{ github.sha }}"
+        # เปลี่ยนมาใช้ตัวแปร REGION
+        IMAGE_TAG="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.SERVICE_NAME }}:${{ github.sha }}"
         docker build -t $IMAGE_TAG .
         docker push $IMAGE_TAG
         echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
@@ -42,12 +44,11 @@ jobs:
       uses: google-github-actions/deploy-cloudrun@v3
       with:
         service: ${{ env.SERVICE_NAME }}
-        region: asia-southeast1
-        image: asia-southeast1-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.SERVICE_NAME }}:${{ github.sha }}
+        region: ${{ env.REGION }}             # เปลี่ยนมาใช้ตัวแปร REGION
+        image: ${{ env.IMAGE_TAG }}           # ดึงตัวแปร IMAGE_TAG จากขั้นตอนที่แล้วมาใช้เลย ไม่ต้องพิมพ์ยาวๆ ซ้ำ
         flags: '--allow-unauthenticated'
         env_vars: |
-          PORT=8080
           OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
           GOOGLE_SPREADSHEET_ID=${{ secrets.GOOGLE_SPREADSHEET_ID }}
-          GOOGLE_PRIVATE_KEY=${{ secrets.GOOGLE_PRIVATE_KEY }}
+          GOOGLE_PRIVATE_KEY="${{ secrets.GOOGLE_PRIVATE_KEY }}"
           GOOGLE_SERVICE_ACCOUNT_EMAIL=${{ secrets.GOOGLE_SERVICE_ACCOUNT_EMAIL }}
