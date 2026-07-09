@@ -1,77 +1,99 @@
-
 import os
 import json
+import hashlib
 import pandas as pd
 from datetime import datetime
+from functools import lru_cache
+from typing import Optional, Dict, Any
 from openai import OpenAI
-from google.auth.transport.requests import Request
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 
 class SmartQueryEngine:
+    # จำกัดจำนวนแถวสูงสุดที่จะส่งให้ LLM เพื่อป้องกัน Token Overflow
+    MAX_CONTEXT_ROWS = 30 
+    MAX_CHARS_PER_CONTEXT = 8000 
+
     def __init__(self):
         self.client = OpenAI()
-        # ดึง Spreadsheet IDs จาก Environment Variables เพื่อความปลอดภัย
         self.spreadsheet_ids = {
-            'main': os.environ.get('GOOGLE_SPREADSHEET_ID', '1M541e-cbFTFXMc94SANX4Svi1SK4WauehhPB3i7Wnw4'),
-            'monthly': os.environ.get('MONTHLY_SPREADSHEET_ID', '1OFH68Lp0U70xAuRdpDb0QxGwOzTxX1VLwLYEnnur6Nc'),
-            'debt': os.environ.get('DEBT_SPREADSHEET_ID', '1yPNCTj0RF9GHcOIuwLyqKECSIwF8oQ4cr2BVBidzFdU')
+            'main': os.environ.get('GOOGLE_SPREADSHEET_ID'),
+            'monthly': os.environ.get('MONTHLY_SPREADSHEET_ID'),
+            'debt': os.environ.get('DEBT_SPREADSHEET_ID')
         }
         self.creds = self._get_credentials()
         self.service = build('sheets', 'v4', credentials=self.creds)
+        
+        # Model configuration via Env with fallback
+        self.planner_model = os.environ.get("PLANNER_MODEL", "gpt-4o-mini")
+        self.answer_model = os.environ.get("ANSWER_MODEL", "gpt-4o")
 
     def _get_credentials(self):
-        private_key = os.environ.get('GOOGLE_PRIVATE_KEY', '').replace('\\n', '\n')
+        """Handle credentials securely with better newline normalization."""
+        private_key = os.environ.get('GOOGLE_PRIVATE_KEY', '')
         email = os.environ.get('GOOGLE_SERVICE_ACCOUNT_EMAIL')
         
         if not private_key or not email:
-            raise ValueError("Missing GOOGLE_PRIVATE_KEY or GOOGLE_SERVICE_ACCOUNT_EMAIL environment variables")
+            raise ValueError("Missing GOOGLE_PRIVATE_KEY or GOOGLE_SERVICE_ACCOUNT_EMAIL")
             
+        # Normalize newlines robustly for both local and container environments
+        normalized_key = private_key.replace("\\n", "\n").strip()
+        
         info = {
             "type": "service_account",
-            "project_id": "manus-project",
-            "private_key": private_key,
+            "project_id": os.environ.get("GCP_PROJECT_ID", "manus-project"),
+            "private_key": normalized_key,
             "client_email": email,
             "token_uri": "https://oauth2.googleapis.com/token",
         }
-        return service_account.Credentials.from_service_account_info(info, scopes=['https://www.googleapis.com/auth/spreadsheets.readonly'])
+        return service_account.Credentials.from_service_account_info(
+            info, scopes=['https://www.googleapis.com/auth/spreadsheets.readonly']
+        )
 
-    def _get_sheet_data(self, spreadsheet_id, range_name):
+    @lru_cache(maxsize=32)
+    def _get_sheet_data(self, spreadsheet_id: str, range_name: str) -> pd.DataFrame:
+        """Cached sheet data fetcher to reduce API quota usage."""
         try:
-            sheet = self.service.spreadsheets()
-            result = sheet.values().get(spreadsheetId=spreadsheet_id, range=range_name).execute()
+            result = self.service.spreadsheets().values().get(
+                spreadsheetId=spreadsheet_id, range=range_name
+            ).execute()
+            
             values = result.get('values', [])
             if not values:
                 return pd.DataFrame()
             return pd.DataFrame(values[1:], columns=values[0])
         except Exception as e:
-            print(f"Error fetching data from {spreadsheet_id}: {e}")
+            print(f"[ERROR] Fetching {spreadsheet_id}/{range_name}: {e}")
             return pd.DataFrame()
 
-    def analyze_query(self, query_text):
-        prompt = f"""
-        You are an expert financial data analyst. A user asks: "{query_text}"
-        Current date is {datetime.now().strftime('%d/%m/%Y')}.
+    def _prepare_context(self, df: pd.DataFrame, source_label: str) -> str:
+        """Safely truncate dataframe to fit within token limits."""
+        if df.empty:
+            return ""
+            
+        # Limit rows and convert to string
+        truncated_df = df.tail(self.MAX_CONTEXT_ROWS)
+        context_str = f"Data from {source_label}:\n{truncated_df.to_string(index=False)}"
         
-        Decide which Google Sheets data is needed to answer this. 
-        Available spreadsheets:
-        1. 'main': Contains 'รายรับ-รายจ่าย' (income/expense), 'การลงทุน' (investment), 'รวมทุกชีต' (summary)
-        2. 'monthly': Contains monthly expense details, 'กำหนดจ่าย' (due dates), 'จ่ายแล้ว' (paid)
-        3. 'debt': Contains 'หนี้สิน' (debts), 'จ่ายหนี้' (debt payments)
-        
-        Output JSON only:
-        {{
-            "needs_data": true/false,
-            "targets": [
-                {{"spreadsheet": "main", "range": "รายรับ-รายจ่าย!A:G"}},
-                ...
-            ],
-            "reasoning": "why this data is needed"
-        }}
-        """
+        # Hard character limit safety net
+        if len(context_str) > self.MAX_CHARS_PER_CONTEXT:
+            context_str = context_str[:self.MAX_CHARS_PER_CONTEXT] + "\n... [TRUNCATED DUE TO LENGTH]"
+            
+        return context_str
+
+    def analyze_query(self, query_text: str) -> Dict[str, Any]:
+        prompt = f"""You are an expert financial data analyst. Current date: {datetime.now().strftime('%d/%m/%Y')}
+User asks: "{query_text}"
+
+Available spreadsheets:
+1. 'main': รายรับ-รายจ่าย, การลงทุน, รวมทุกชีต
+2. 'monthly': รายละเอียดรายจ่ายเดือน, กำหนดจ่าย, จ่ายแล้ว
+3. 'debt': หนี้สิน, จ่ายหนี้
+
+Output JSON only:"""
         
         response = self.client.chat.completions.create(
-            model="gpt-5-mini",
+            model=self.planner_model,
             messages=[{"role": "user", "content": prompt}],
             response_format={"type": "json_schema", "json_schema": {
                 "name": "query_plan",
@@ -100,53 +122,61 @@ class SmartQueryEngine:
             }}
         )
         
-        plan = json.loads(response.choices[0].message.content)
-        return plan
+        content = response.choices[0].message.content
+        if not content:
+            raise ValueError("Empty response from planner model")
+        return json.loads(content)
 
-    def execute_smart_query(self, query_text):
+    def execute_smart_query(self, query_text: str) -> str:
         try:
             plan = self.analyze_query(query_text)
-            if not plan['needs_data']:
-                return "ขออภัยครับ ผมไม่แน่ใจว่าต้องดึงข้อมูลส่วนไหนมาตอบคำถามนี้"
+            
+            if not plan.get('needs_data'):
+                return "ขออภัยครับ คำถามนี้ไม่จำเป็นต้องดึงข้อมูลจาก Spreadsheet หรือผมไม่เข้าใจบริบทครับ"
 
-            context_data = []
+            context_parts = []
             for target in plan['targets']:
                 sid = self.spreadsheet_ids.get(target['spreadsheet'])
                 if not sid:
                     continue
+                    
                 df = self._get_sheet_data(sid, target['range'])
-                if not df.empty:
-                    context_data.append(f"Data from {target['spreadsheet']} ({target['range']}):\n{df.tail(50).to_string()}")
+                safe_context = self._prepare_context(df, f"{target['spreadsheet']} ({target['range']})")
+                if safe_context:
+                    context_parts.append(safe_context)
 
-            if not context_data:
-                return "ไม่พบข้อมูลที่เกี่ยวข้องใน Google Sheets ของคุณครับ"
+            if not context_parts:
+                return "ไม่พบข้อมูลที่เกี่ยวข้องใน Google Sheets ครับ กรุณาตรวจสอบชื่อชีตหรือช่วงข้อมูลอีกครั้ง"
 
-            full_context = "\n\n".join(context_data)
+            answer_prompt = f"""User Query: "{query_text}"
+Current Date: {datetime.now().strftime('%d/%m/%Y')}
+
+Data Context:
+{chr(10).join(context_parts)}
+
+Instructions:
+- Answer accurately in Thai based ONLY on the provided data.
+- If asking about "working days", look for "ค่าแรง" in income items.
+- Be concise, professional, and cite specific numbers when available.
+- If data is insufficient, clearly state what's missing instead of guessing."""
             
-            answer_prompt = f"""
-            User Query: "{query_text}"
-            Current Date: {datetime.now().strftime('%d/%m/%Y')}
-            
-            Data Context:
-            {full_context}
-            
-            Based on the data above, answer the user's question accurately in Thai. 
-            If the question is about "working days", look for "ค่าแรง" in the income items.
-            Be concise and professional.
-            """
-            
-            answer_response = self.client.chat.completions.create(
-                model="gpt-5",
+            response = self.client.chat.completions.create(
+                model=self.answer_model,
                 messages=[{"role": "user", "content": answer_prompt}]
             )
             
-            return answer_response.choices[0].message.content
+            return response.choices[0].message.content or "ไม่สามารถสร้างคำตอบได้ครับ"
+            
+        except json.JSONDecodeError as e:
+            return f"เกิดข้อผิดพลาดในการแปลผลแผนการดึงข้อมูล: {str(e)}"
         except Exception as e:
-            return f"เกิดข้อผิดพลาดในการประมวลผล: {str(e)}"
+            print(f"[FATAL] Smart Query Error: {e}")
+            return f"เกิดข้อผิดพลาดในระบบ: {type(e).__name__} - กรุณาลองใหม่อีกครั้ง"
 
 if __name__ == '__main__':
     import sys
     if len(sys.argv) > 1:
-        query_text = sys.argv[1]
         engine = SmartQueryEngine()
-        print(engine.execute_smart_query(query_text))
+        print(engine.execute_smart_query(sys.argv[1]))
+    else:
+        print("Usage: python smart_query.py \"คำถามของคุณ\"")
