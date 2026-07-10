@@ -152,7 +152,7 @@ function formatUserLabel(userInfo) {
   const platform = userInfo.platform || 'Unknown';
   const displayName = userInfo.displayName || 'ไม่ระบุ';
 
-  return `[${platform}] ${displayName}`;
+  return `${displayName}`;
 }
 
 module.exports = { extractUser, formatUserLabel };

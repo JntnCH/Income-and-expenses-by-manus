@@ -116,7 +116,7 @@ module.exports = {
   buildIncomeConfirmation,
   buildExpenseConfirmation,
   buildBuyInvestmentConfirmation,
-  buildSellInvestmentConfirmation,
   buildBalanceSummary,
-  formatAmount
+  formatAmount,
 };
+}
