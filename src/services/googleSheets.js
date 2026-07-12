@@ -114,63 +114,56 @@ async function saveInvestmentRecord(data) {
 }
 
 async function getBalanceSummary() {
-  const auth = getAuthClient();
-  const sheets = google.sheets({ version: 'v4', auth });
-  const spreadsheetId = process.env.GOOGLE_SPREADSHEET_ID;
-  const summarySheetName = process.env.GOOGLE_SUMMARY_SHEET_NAME || 'รวมทุกชีต';
+  const auth = getAuthClient();[span_10](start_span)[span_10](end_span)
+  const sheets = google.sheets({ version: 'v4', auth });[span_11](start_span)[span_11](end_span)
+  const spreadsheetId = process.env.GOOGLE_SPREADSHEET_ID;[span_12](start_span)[span_12](end_span)
+  
+  // ชี้เป้าไปที่ชีตหน้าแดชบอร์ดสรุป ดึงมาแค่พื้นที่ A1 ถึง I40 พอครับ
+  const dashboardSheetName = 'BotDashboard'; 
 
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId,
-    range: `${summarySheetName}!A:J`
+    range: `${dashboardSheetName}!A1:I40`
   });
 
   const rows = response.data.values || [];
-  
-  const bangkokNow = getBangkokNow();
-  const todayDay = bangkokNow.getDate();
-  const todayMonth = bangkokNow.getMonth();
-  const todayYear = bangkokNow.getFullYear();
+  const bangkokNow = getBangkokNow();[span_13](start_span)[span_13](end_span)
 
-  let dailyIncome = 0, dailyExpense = 0;
-  let monthlyIncome = 0, monthlyExpense = 0;
+  // --- 1. ดึงตัวเลขสรุปจากคอลัมน์ B (แถวที่ 2 ถึง 6) ---
+  // โค้ด JavaScript นับ Index เริ่มจาก 0 (ดังนั้น แถว 2 คือ index 1, คอลัมน์ B คือ index 1)
+  const dailyIncome   = parseFloat(String(rows[1]?.[1] || 0).replace(/,/g, ''));
+  const dailyExpense  = parseFloat(String(rows[2]?.[1] || 0).replace(/,/g, ''));
+  const monthlyIncome = parseFloat(String(rows[3]?.[1] || 0).replace(/,/g, ''));
+  const monthlyExpense= parseFloat(String(rows[4]?.[1] || 0).replace(/,/g, ''));
+  const balance       = parseFloat(String(rows[5]?.[1] || 0).replace(/,/g, ''));
+
   const todayItems = [];
 
-  for (let i = 1; i < rows.length; i++) {
+  // --- 2. ดึงรายการรายวันฝั่งรายรับ (เริ่มแถว 9 คือ index 8 เป็นต้นไป) ---
+  for (let i = 8; i < rows.length; i++) {
     const row = rows[i];
     if (!row) continue;
-
-    // --- ประมวลผลรายจ่าย (A-D) ---
-    if (row[0] && row[2]) {
-      const expDate = parseDate(row[0]);
-      const expAmount = parseFloat(String(row[2]).replace(/,/g, '')) || 0;
-      const expItem = row[1] || '';
-
-      if (expDate && !isNaN(expAmount)) {
-        if (expDate.getMonth() === todayMonth && expDate.getFullYear() === todayYear) {
-          monthlyExpense += expAmount;
-          if (expDate.getDate() === todayDay) {
-            dailyExpense += expAmount;
-            todayItems.push({ item: expItem, type: 'รายจ่าย', amount: expAmount });
-          }
-        }
-      }
+    
+    // คอลัมน์ B (index 1) คือ ชื่อรายรับ, คอลัมน์ C (index 2) คือ จำนวนเงิน
+    const incItem = row[1];
+    const incAmount = parseFloat(String(row[2] || 0).replace(/,/g, ''));
+    
+    if (incItem && incItem !== 'ไม่มีรายรับ' && !isNaN(incAmount) && incAmount > 0) {
+      todayItems.push({ item: incItem, type: 'รายรับ', amount: incAmount });
     }
+  }
 
-    // --- ประมวลผลรายรับ (G-J) ---
-    if (row[6] && row[8]) {
-      const incDate = parseDate(row[6]);
-      const incAmount = parseFloat(String(row[8]).replace(/,/g, '')) || 0;
-      const incItem = row[7] || '';
-
-      if (incDate && !isNaN(incAmount)) {
-        if (incDate.getMonth() === todayMonth && incDate.getFullYear() === todayYear) {
-          monthlyIncome += incAmount;
-          if (incDate.getDate() === todayDay) {
-            dailyIncome += incAmount;
-            todayItems.push({ item: incItem, type: 'รายรับ', amount: incAmount });
-          }
-        }
-      }
+  // --- 3. ดึงรายการรายวันฝั่งรายจ่าย (เริ่มแถว 9 คือ index 8 เป็นต้นไป) ---
+  for (let i = 8; i < rows.length; i++) {
+    const row = rows[i];
+    if (!row) continue;
+    
+    // คอลัมน์ G (index 6) คือ ชื่อรายจ่าย, คอลัมน์ H (index 7) คือ จำนวนเงิน
+    const expItem = row[6];
+    const expAmount = parseFloat(String(row[7] || 0).replace(/,/g, ''));
+    
+    if (expItem && expItem !== 'ไม่มีรายจ่าย' && !isNaN(expAmount) && expAmount > 0) {
+      todayItems.push({ item: expItem, type: 'รายจ่าย', amount: expAmount });
     }
   }
 
@@ -179,65 +172,9 @@ async function getBalanceSummary() {
     dailyExpense,
     monthlyIncome,
     monthlyExpense,
-    balance: monthlyIncome - monthlyExpense,
+    balance,
     todayItems,
-    summarySheet: summarySheetName,
-    formattedDate: formatThaiDate(bangkokNow)
+    summarySheet: dashboardSheetName,
+    formattedDate: formatThaiDate(bangkokNow)[span_14](start_span)[span_14](end_span)
   };
 }
-
-function parseDate(dateStr) {
-  if (!dateStr) return null;
-  
-  // รองรับรูปแบบ "D/M/YYYY" หรือ "DD/MM/YYYY"
-  const slashParts = String(dateStr).split(' ')[0].split('/');
-  if (slashParts.length === 3) {
-    const day = parseInt(slashParts[0]);
-    const month = parseInt(slashParts[1]) - 1;
-    const year = parseInt(slashParts[2]);
-    if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
-      return new Date(year, month, day);
-    }
-  }
-
-  // Fallback สำหรับรูปแบบเดิม "28 มิ.ย. 2026"
-  const monthsMap = {
-    'ม.ค.': 0, 'ก.พ.': 1, 'มี.ค.': 2, 'เม.ย.': 3, 'พ.ค.': 4, 'มิ.ย.': 5,
-    'ก.ค.': 6, 'ส.ค.': 7, 'ก.ย.': 8, 'ต.ค.': 9, 'พ.ย.': 10, 'ธ.ค.': 11
-  };
-  const spaceParts = String(dateStr).split(' ');
-  if (spaceParts.length >= 3) {
-    const day = parseInt(spaceParts[0]);
-    const month = monthsMap[spaceParts[1]];
-    const year = parseInt(spaceParts[2]);
-    if (!isNaN(day) && month !== undefined && !isNaN(year)) {
-      return new Date(year, month, day);
-    }
-  }
-
-  let d = new Date(dateStr);
-  return isNaN(d.getTime()) ? null : d;
-}
-
-async function getRecentRecords(limit = 10) {
-  const auth = getAuthClient();
-  const sheets = google.sheets({ version: 'v4', auth });
-  const spreadsheetId = process.env.GOOGLE_SPREADSHEET_ID;
-  const sheetName = process.env.GOOGLE_SHEET_NAME || 'รายรับ-รายจ่าย';
-
-  const response = await sheets.spreadsheets.values.get({
-    spreadsheetId,
-    range: `${sheetName}!A:G`
-  });
-
-  const rows = response.data.values || [];
-  return rows.slice(1).slice(-limit).reverse();
-}
-
-module.exports = {
-  saveRecord,
-  saveInvestmentRecord,
-  getBalanceSummary,
-  getRecentRecords,
-  formatThaiDate
-};
