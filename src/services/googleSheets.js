@@ -114,9 +114,9 @@ async function saveInvestmentRecord(data) {
 }
 
 async function getBalanceSummary() {
-  const auth = getAuthClient();[span_10](start_span)[span_10](end_span)
-  const sheets = google.sheets({ version: 'v4', auth });[span_11](start_span)[span_11](end_span)
-  const spreadsheetId = process.env.GOOGLE_SPREADSHEET_ID;[span_12](start_span)[span_12](end_span)
+  const auth = getAuthClient();
+  const sheets = google.sheets({ version: 'v4', auth });
+  const spreadsheetId = process.env.GOOGLE_SPREADSHEET_ID;
   
   // ชี้เป้าไปที่ชีตหน้าแดชบอร์ดสรุป ดึงมาแค่พื้นที่ A1 ถึง I40 พอครับ
   const dashboardSheetName = 'BotDashboard'; 
@@ -127,7 +127,7 @@ async function getBalanceSummary() {
   });
 
   const rows = response.data.values || [];
-  const bangkokNow = getBangkokNow();[span_13](start_span)[span_13](end_span)
+  const bangkokNow = getBangkokNow();
 
   // --- 1. ดึงตัวเลขสรุปจากคอลัมน์ B (แถวที่ 2 ถึง 6) ---
   // โค้ด JavaScript นับ Index เริ่มจาก 0 (ดังนั้น แถว 2 คือ index 1, คอลัมน์ B คือ index 1)
@@ -175,6 +175,6 @@ async function getBalanceSummary() {
     balance,
     todayItems,
     summarySheet: dashboardSheetName,
-    formattedDate: formatThaiDate(bangkokNow)[span_14](start_span)[span_14](end_span)
+    formattedDate: formatThaiDate(bangkokNow)
   };
 }

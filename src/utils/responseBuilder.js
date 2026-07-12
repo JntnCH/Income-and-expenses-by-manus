@@ -99,7 +99,8 @@ return (
   `| รายจ่ายเดือนนี้ | **${formatAmount(summary.monthlyExpense)} บาท** |\n\n` +
   `---\n` +
   `### 🪙 ยอดคงเหลือ : **${formatAmount(summary.balance)} บาท**`
-);
+  );
+}
 
 /**
  * จัดรูปแบบตัวเลขเงิน
@@ -116,7 +117,7 @@ module.exports = {
   buildIncomeConfirmation,
   buildExpenseConfirmation,
   buildBuyInvestmentConfirmation,
+  buildSellInvestmentConfirmation,
   buildBalanceSummary,
   formatAmount,
 };
-}
