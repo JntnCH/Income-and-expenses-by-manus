@@ -131,6 +131,8 @@ async function getBalanceSummary() {
 
   // --- 1. ดึงตัวเลขสรุปจากคอลัมน์ B (แถวที่ 2 ถึง 6) ---
   // โค้ด JavaScript นับ Index เริ่มจาก 0 (ดังนั้น แถว 2 คือ index 1, คอลัมน์ B คือ index 1)
+  // โครงสร้างตามที่คุณระบุ: B2:รายรับวัน, B3:รายจ่ายวัน, B4:รายรับเดือน, B5:รายจ่ายเดือน, B6:ยอดคงเหลือ
+  // rows[1] คือ แถว 2, index [1] คือ คอลัมน์ B
   const dailyIncome   = parseFloat(String(rows[1]?.[1] || 0).replace(/,/g, ''));
   const dailyExpense  = parseFloat(String(rows[2]?.[1] || 0).replace(/,/g, ''));
   const monthlyIncome = parseFloat(String(rows[3]?.[1] || 0).replace(/,/g, ''));
