@@ -70,12 +70,10 @@ function buildSellInvestmentConfirmation(assetName, assetType, quantity, pricePe
  * สรุปยอดคงเหลือ
  */
 function buildBalanceSummary(summary) {
-  let itemsText = '';
-  if (summary.todayItems && summary.todayItems.length > 0) {
-    itemsText = summary.todayItems
-      .map(i => {
-        return `- ${i.item} ${formatAmount(i.amount)} บาท`;
-      })
+  let itemsText = "";
+for (const item of todayItems) {
+  itemsText += `- ${item.item} : ${item.amount} บาท\n`; // เปลี่ยนเป็น : แทน |
+})
       .join('\n');
   } else {
     itemsText = 'ยังไม่มีรายการวันนี้';
