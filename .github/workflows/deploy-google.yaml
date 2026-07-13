@@ -3,53 +3,63 @@ name: Deploy to Google Cloud Run
 on:
   push:
     branches:
-      - main
+      - main  # หรือชื่อกิ่งของคุณ เช่น master / develop
 
+# 📌 1. กลุ่มค่ากำหนดพื้นฐาน (Environment Variables ระดับ Workflow)
 env:
-  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-  REGION: asia-southeast1
-  REPO_NAME: income-bot-repo
-  SERVICE_NAME: income-expense-bot
-  REGISTRY_DOMAIN: asia-southeast1-docker.pkg.dev  # เพิ่มบรรทัดนี้
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}     # ID ของโปรเจกต์ GCP (เช่น income-expense-12345)
+  REGION: asia-southeast1                       # โซนเซิร์ฟเวอร์ (แนะนำ สิงคโปร์: asia-southeast1)
+  SERVICE_NAME: income-expense-bot              # ชื่อบริการของ Cloud Run ที่จะสร้าง/อัปเดต
+  GAR_LOCATION: asia-southeast1                 # ที่ตั้งของ Artifact Registry (มักจะเหมือน REGION)
+  REPOSITORY: income-bot-repo                    # ชื่อคลังเก็บ Docker Image ใน Artifact Registry
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
+    # 📌 2. กลุ่มการยืนยันตัวตน (Authentication)
     - name: Authenticate to Google Cloud
-      uses: google-github-actions/auth@v3
+      uses: google-github-actions/auth@v2
       with:
-        credentials_json: ${{ secrets.GCP_SA_KEY }}
+        credentials_json: ${{ secrets.GCP_SA_KEY }} # คีย์ JSON ของ Service Account จาก GCP
 
     - name: Set up Cloud SDK
-      uses: google-github-actions/setup-gcloud@v3
+      uses: google-github-actions/setup-gcloud@v2
 
     - name: Configure Docker for GCP
       run: |
-        gcloud auth configure-docker ${{ env.REGISTRY_DOMAIN }} --quiet
+        gcloud auth configure-docker ${{ env.GAR_LOCATION }}-docker.pkg.dev
 
+    # 📌 3. ขั้นตอน Build และ Push (จุดที่เคยพังในรูปแรก)
     - name: Build and Push Docker Image
       run: |
-        IMAGE_TAG="${{ env.REGISTRY_DOMAIN }}/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.SERVICE_NAME }}:${{ github.sha }}"
-        docker build -t $IMAGE_TAG .
-        docker push $IMAGE_TAG
-        echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
+        docker build -t ${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.SERVICE_NAME }}:${{ github.sha }} .
+        docker push ${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.SERVICE_NAME }}:${{ github.sha }}
 
+    # 📌 4. ขั้นตอนส่งขึ้น Cloud Run + แนบค่า Environment Variables (จากรูปที่สอง)
     - name: Deploy to Cloud Run
-      uses: google-github-actions/deploy-cloudrun@v3
+      uses: google-github-actions/deploy-cloudrun@v2
       with:
         service: ${{ env.SERVICE_NAME }}
         region: ${{ env.REGION }}
-        image: ${{ env.IMAGE_TAG }}
-        flags: '--allow-unauthenticated'
+        image: ${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.SERVICE_NAME }}:${{ github.sha }}
+        
+        # ใส่ค่า Environment Variables ที่แอปของคุณต้องการใช้รันจริงตรงนี้ครับ
         env_vars: |
-          OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
-          GOOGLE_PRIVATE_KEY="${{ secrets.GOOGLE_PRIVATE_KEY }}"
+          NODE_ENV=production
           GOOGLE_SERVICE_ACCOUNT_EMAIL=${{ secrets.GOOGLE_SERVICE_ACCOUNT_EMAIL }}
-          GOOGLE_SPREADSHEET_ID=${{ secrets.GOOGLE_SPREADSHEET_ID }}
-          MONTHLY_SPREADSHEET_ID=${{ secrets.GOOGLE_SPREADSHEET_ID }}
-          DEBT_SPREADSHEET_ID=${{ secrets.GOOGLE_SPREADSHEET_ID }}
+          GOOGLE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nMIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCt9iXYqZNeUOET\n1XTomeZMitVZtAzG35ZEU/N3dHBOVGin69H8Xd69ciO5eAUl+tsYfiyXLnxpZM7a\nfbOHVZbSLVoz5mIHufk5z3r1n21oZBJN59ZBjABcCHGM2MHL3eu+LcZlhReW7Nb4\nukcWIgVv7uo48A72taRhiFLdnINONUYpkz3gAkUnp3U0zmWUUzPIUcd3rpJenD+H\nE+X34Yplfo9RZhTe7YLTmUr6pDoSztnCBEbQdcZ9L8pAe7nqrjT6FP7VJLEd6RsZ\n6eP3CneoNQPTVk4Zk7ZS4Gu+QRAiQacAKODaGlX3Mb0Ami2wfZUA0TOU0aGi5H8b\nPXvJ/DXDAgMBAAECggEABzKJc1LkyYCwJ0lsGlmPuTf/RsRXyPykM3SDvLwBD4SX\nhecQW5AosI7h4oEQOXeNDBDgWGrwc83bbxfHT0CfylddBYuxH5+2q4kljbcIaErH\npRiD+VdJBoXE6O5o6j3mzIoJTNb6WGC5LjZKzaQftHdekneALv3p7K0evJOGrTwe\nkY0Ad2p4m3Mc+zGP66vW6JP59Iz9S+1YNqqC2y6NQs4dkqAA9ATCcegKWs7zDEZd\nawxk/bgEqIJL0ge6YwCk1cbQaVwsc/j0H4JXqWyoJhZqx3RrF7maUHDkfrVSCzcv\nAextxKep5Ead4IidTPVv9fa9CnfLI093UxzIUPNzUQKBgQDWc1kIB7pPjXIu2qZ/\nPABuGIE1N8ZMbVWRzO3MrYZ2cokdykiYkIQ0GQgOm7pNEmR4AyGI5rNvo56vl9AQ\nWIKRJ9V72Owus4ewkFUJJJ9daLsBoe1jBTFJ3Va+Iker5bGMpOwVavPx0ZzD0xkg\n94YScVxVkGfI0BA8FqQk0D6ZMQKBgQDPqo+OyhPvkUPqUWsodYT+AwDQInSt5hMp\nyM8MVnMEVlb7uap7yPBeSoxNPNlqyQz9THmoI+qeLRRCbEoAFBRV2ApW7N7h2lzg\nFbFyF9QtS9aj1vGflUlaeCluM55OhKw3hRF9BDvpswLnCUwxubMdmGgrFfFRtY0o\nAi5skvKBMwKBgBqr9/vGskZoqjXnneOfO9J1m8RZroEc7BKZMU5OmrWqoyEgYo0P\nFFJCdr0SY0ZorjQ693XGc7TD3d2q/Qa7a2nQUX34yc85Jvwvx1O+yU9d0jxuvk6d\ne7bbH4nAS7e2drGuZWp4heSilGPKoop2Hqe2j6xYrH/OWOaQTlQBzndRAoGARaQz\nRHVsPhj/J6NqRkUy9mRXb3U+n9rablbTaJXNOJUj0oMvMxft1BE3/+b6Gp+V5ZQx\n8DsrQSRo+OWL437YWvl6bjA9hoxOPS/JNDPdids2/fblTNkpoldNvZE986L2hh/v\n/3beCL9pp8UscjiOYsxrkpdnODmkPtiMbQjSnpUCgYBiiExieDdXP2ly2oEP0m/r\nAa9Arrgw6cgp2xOm6qNLmIGsA6sAsZFcQQrK+U0XkOvoISBvmRfWGj2oLwszEK05\nLMC2Hm+/BHyiLnYaWyOCrkrPvkuIRyE/Z4NW00ycth/a/nN87dYUVOgs7Jj0+sVW\nUPyxK2wT6aPp7uAQ20ckQw==\n-----END PRIVATE KEY-----\n"
+          GOOGLE_SPREADSHEET_ID=1yPNCTj0RF9GHcOIuwLyqKECSIwF8oQ4cr2BVBidzFdU
+          MONTHLY_SPREADSHEET_ID=16gOMnohl7v9RPTTqhHtJlMV6U65OJSiKDu02DIPdEwg
+          DEBT_SPREADSHEET_ID=1FENTWNHjQIGBQ-GWjPhV7qf8Yh7Qdk2MqPMzRVeyZX0
+          GOOGLE_SHEET_NAME=รายรับ-รายจ่าย
+          GOOGLE_INVEST_SHEET_NAME=การลงทุน
+          GOOGLE_SUMMARY_SHEET_NAME=รวมทุกชีต
+          OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+          DIALOGFLOW_PROJECT_ID=income-expenses-by-manus
+          OCR_PROVIDER=tesseract
+          IAPP_API_KEY=${{ secrets.IAPP_API_KEY }}
+          APPMAN_API_KEY=${{ secrets.APPMAN_API_KEY }}
