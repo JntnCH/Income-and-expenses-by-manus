@@ -76,6 +76,7 @@ router.post('/dialogflow', async (req, res) => {
         break;
       }
 
+      case 'เช็คยอด':
       case 'CheckBalance': {
         try {
           const summary = await getBalanceSummary();
