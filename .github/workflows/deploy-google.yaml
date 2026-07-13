@@ -10,6 +10,7 @@ env:
   REGION: asia-southeast1
   REPO_NAME: income-bot-repo
   SERVICE_NAME: income-expense-bot
+  REGISTRY_DOMAIN: asia-southeast1-docker.pkg.dev  # เพิ่มบรรทัดนี้
 
 jobs:
   deploy:
@@ -29,13 +30,11 @@ jobs:
 
     - name: Configure Docker for GCP
       run: |
-        # Use correct Artifact Registry domain: <region>-docker.pkg.dev
-        gcloud auth configure-docker asia-docker.pkg.dev --quiet
+        gcloud auth configure-docker ${{ env.REGISTRY_DOMAIN }} --quiet
 
     - name: Build and Push Docker Image
       run: |
-        # Use correct Artifact Registry domain
-        IMAGE_TAG="asia-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.SERVICE_NAME }}:${{ github.sha }}"
+        IMAGE_TAG="${{ env.REGISTRY_DOMAIN }}/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.SERVICE_NAME }}:${{ github.sha }}"
         docker build -t $IMAGE_TAG .
         docker push $IMAGE_TAG
         echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
