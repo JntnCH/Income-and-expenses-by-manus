@@ -94,6 +94,7 @@ return (
   `• รายจ่ายเดือนนี้ : *${formatAmount(summary.monthlyExpense)} บาท*\n\n` +
   `------------------------------\n` +
   `*🪙 ยอดคงเหลือ :* *${formatAmount(summary.balance)} บาท*`
+  "parse_mode":"markdownV2"
 );
 }
 
