@@ -93,13 +93,13 @@ return (
   `| รายรับวันนี้ | **${formatAmount(summary.dailyIncome)} บาท** |\n` +
   `| รายจ่ายวันนี้ | **${formatAmount(summary.dailyExpense)} บาท** |\n\n` +
   `### 💰 สรุปรายเดือน\n` +
-  `| ประเภท | จนวน |\n` +
+  `| ประเภท | จำนวน |\n` +
   `|--------|-------|\n` +
   `| รายรับเดือนนี้ | **${formatAmount(summary.monthlyIncome)} บาท** |\n` +
   `| รายจ่ายเดือนนี้ | **${formatAmount(summary.monthlyExpense)} บาท** |\n\n` +
   `---\n` +
   `### 🪙 ยอดคงเหลือ : **${formatAmount(summary.balance)} บาท**`
-  );
+);
 }
 
 /**
