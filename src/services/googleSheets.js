@@ -2,24 +2,22 @@ const { google } = require('googleapis');
 
 /**
  * Google Sheets Service
- * ปรับปรุงใหม่ตามโครงสร้างที่ผู้ใช้กำหนด
- * 
- * การบันทึก (Write) ลงชีต "รายรับ-รายจ่าย":
- * A: วันที่ (28/6/2026)
- * B: ประเภท (income, expense)
- * C: รายการ
- * D: จำนวนเงิน
- * E: หมวดหมู่
- * F: ช่องทาง
- * G: ผู้บันทึก
- * 
- * การเช็คยอด (Read) จากชีต "รวมทุกชีต":
- * รายรับ: G=วันที่, H=รายการ, I=จำนวนเงิน, J=กลุ่มรายรับ
- * รายจ่าย: A=วันที่, B=รายการ, C=จำนวนเงิน, D=กลุ่มรายจ่าย
+ * ปรับปรุงใหม่ตามโครงสร้างที่ผู้ใช้กำหนด (BotDashboard)
  */
 
 function getAuthClient() {
-  const privateKey = (process.env.GOOGLE_PRIVATE_KEY || '').replace(/\\n/g, '\n');
+  let privateKey = process.env.GOOGLE_PRIVATE_KEY || '';
+  
+  // จัดการกับปัญหาเรื่องการขึ้นบรรทัดใหม่และเครื่องหมายอัญประกาศที่อาจติดมา
+  if (privateKey.includes('\\n')) {
+    privateKey = privateKey.replace(/\\n/g, '\n');
+  }
+  
+  // ลบเครื่องหมาย " ที่อาจจะติดมาจากการตั้งค่าในบาง Platform (เช่น Railway/Vercel)
+  if (privateKey.startsWith('"') && privateKey.endsWith('"')) {
+    privateKey = privateKey.substring(1, privateKey.length - 1);
+  }
+
   return new google.auth.JWT(
     process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
     null,
@@ -28,17 +26,11 @@ function getAuthClient() {
   );
 }
 
-/**
- * ดึงวันเวลาปัจจุบันใน Timezone Asia/Bangkok
- */
 function getBangkokNow() {
   const now = new Date();
   return new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Bangkok' }));
 }
 
-/**
- * รูปแบบวันที่สำหรับแสดงผลและบันทึก: 28/6/2026 (ไม่มี 0 นำหน้า)
- */
 function formatThaiDate(date) {
   const day = date.getDate();
   const month = date.getMonth() + 1;
@@ -46,9 +38,6 @@ function formatThaiDate(date) {
   return `${day}/${month}/${year}`;
 }
 
-/**
- * ดึงเฉพาะวันที่สำหรับบันทึก: 28/6/2026
- */
 function getBangkokDateString() {
   return formatThaiDate(getBangkokNow());
 }
@@ -78,7 +67,7 @@ async function saveRecord(data) {
   await sheets.spreadsheets.values.append({
     spreadsheetId,
     range: `${sheetName}!A:G`,
-    valueInputOption: 'USER_ENTERED', // เปลี่ยนกลับเป็น USER_ENTERED เพื่อลบเครื่องหมาย '
+    valueInputOption: 'USER_ENTERED',
     requestBody: { values: [row] }
   });
 
@@ -106,7 +95,7 @@ async function saveInvestmentRecord(data) {
   await sheets.spreadsheets.values.append({
     spreadsheetId,
     range: `${investSheetName}!A:I`,
-    valueInputOption: 'USER_ENTERED', // เปลี่ยนกลับเป็น USER_ENTERED เพื่อลบเครื่องหมาย '
+    valueInputOption: 'USER_ENTERED',
     requestBody: { values: [row] }
   });
 
@@ -117,8 +106,6 @@ async function getBalanceSummary() {
   const auth = getAuthClient();
   const sheets = google.sheets({ version: 'v4', auth });
   const spreadsheetId = process.env.GOOGLE_SPREADSHEET_ID;
-  
-  // ชี้เป้าไปที่ชีตหน้าแดชบอร์ดสรุป ดึงมาแค่พื้นที่ A1 ถึง I40 พอครับ
   const dashboardSheetName = 'BotDashboard'; 
 
   const response = await sheets.spreadsheets.values.get({
@@ -130,9 +117,7 @@ async function getBalanceSummary() {
   const bangkokNow = getBangkokNow();
 
   // --- 1. ดึงตัวเลขสรุปจากคอลัมน์ B (แถวที่ 2 ถึง 6) ---
-  // โค้ด JavaScript นับ Index เริ่มจาก 0 (ดังนั้น แถว 2 คือ index 1, คอลัมน์ B คือ index 1)
-  // โครงสร้างตามที่คุณระบุ: B2:รายรับวัน, B3:รายจ่ายวัน, B4:รายรับเดือน, B5:รายจ่ายเดือน, B6:ยอดคงเหลือ
-  // rows[1] คือ แถว 2, index [1] คือ คอลัมน์ B
+  // B2:รายรับวัน, B3:รายจ่ายวัน, B4:รายรับเดือน, B5:รายจ่ายเดือน, B6:ยอดคงเหลือ
   const dailyIncome   = parseFloat(String(rows[1]?.[1] || 0).replace(/,/g, ''));
   const dailyExpense  = parseFloat(String(rows[2]?.[1] || 0).replace(/,/g, ''));
   const monthlyIncome = parseFloat(String(rows[3]?.[1] || 0).replace(/,/g, ''));
@@ -141,30 +126,30 @@ async function getBalanceSummary() {
 
   const todayItems = [];
 
-  // --- 2. ดึงรายการรายวันฝั่งรายรับ (เริ่มแถว 9 คือ index 8 เป็นต้นไป) ---
-  for (let i = 8; i < rows.length; i++) {
+  // --- 2. ดึงรายการรายวันฝั่งรายรับ (เริ่มแถว 8 คือ index 7 เป็นต้นไป) ---
+  // A8:วันที่, B8:รายรับ, C8:จำนวนเงิน, D8:หมวดหมู่
+  for (let i = 7; i < rows.length; i++) {
     const row = rows[i];
-    if (!row) continue;
+    if (!row || row.length < 3) continue;
     
-    // คอลัมน์ B (index 1) คือ ชื่อรายรับ, คอลัมน์ C (index 2) คือ จำนวนเงิน
-    const incItem = row[1];
-    const incAmount = parseFloat(String(row[2] || 0).replace(/,/g, ''));
+    const incItem = row[1]; // B
+    const incAmount = parseFloat(String(row[2] || 0).replace(/,/g, '')); // C
     
-    if (incItem && incItem !== 'ไม่มีรายรับ' && !isNaN(incAmount) && incAmount > 0) {
+    if (incItem && incItem !== 'รายรับ' && incItem !== 'วันที่' && !isNaN(incAmount) && incAmount > 0) {
       todayItems.push({ item: incItem, type: 'รายรับ', amount: incAmount });
     }
   }
 
-  // --- 3. ดึงรายการรายวันฝั่งรายจ่าย (เริ่มแถว 9 คือ index 8 เป็นต้นไป) ---
-  for (let i = 8; i < rows.length; i++) {
+  // --- 3. ดึงรายการรายวันฝั่งรายจ่าย (เริ่มแถว 8 คือ index 7 เป็นต้นไป) ---
+  // F8:วันที่, G8:รายจ่าย, H8:จำนวนเงิน, I8:หมวดหมู่
+  for (let i = 7; i < rows.length; i++) {
     const row = rows[i];
-    if (!row) continue;
+    if (!row || row.length < 8) continue;
     
-    // คอลัมน์ G (index 6) คือ ชื่อรายจ่าย, คอลัมน์ H (index 7) คือ จำนวนเงิน
-    const expItem = row[6];
-    const expAmount = parseFloat(String(row[7] || 0).replace(/,/g, ''));
+    const expItem = row[6]; // G (index 6)
+    const expAmount = parseFloat(String(row[7] || 0).replace(/,/g, '')); // H (index 7)
     
-    if (expItem && expItem !== 'ไม่มีรายจ่าย' && !isNaN(expAmount) && expAmount > 0) {
+    if (expItem && expItem !== 'รายจ่าย' && expItem !== 'วันที่' && !isNaN(expAmount) && expAmount > 0) {
       todayItems.push({ item: expItem, type: 'รายจ่าย', amount: expAmount });
     }
   }
@@ -180,3 +165,9 @@ async function getBalanceSummary() {
     formattedDate: formatThaiDate(bangkokNow)
   };
 }
+
+module.exports = {
+  saveRecord,
+  saveInvestmentRecord,
+  getBalanceSummary
+};

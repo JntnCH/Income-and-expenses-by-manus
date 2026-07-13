@@ -29,13 +29,13 @@ jobs:
 
     - name: Configure Docker for GCP
       run: |
-        # เปลี่ยนมาใช้ตัวแปร REGION
-        gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+        # Use correct Artifact Registry domain: <region>-docker.pkg.dev
+        gcloud auth configure-docker asia-docker.pkg.dev --quiet
 
     - name: Build and Push Docker Image
       run: |
-        # เปลี่ยนมาใช้ตัวแปร REGION
-        IMAGE_TAG="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.SERVICE_NAME }}:${{ github.sha }}"
+        # Use correct Artifact Registry domain
+        IMAGE_TAG="asia-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.SERVICE_NAME }}:${{ github.sha }}"
         docker build -t $IMAGE_TAG .
         docker push $IMAGE_TAG
         echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
@@ -44,8 +44,8 @@ jobs:
       uses: google-github-actions/deploy-cloudrun@v3
       with:
         service: ${{ env.SERVICE_NAME }}
-        region: ${{ env.REGION }}             # เปลี่ยนมาใช้ตัวแปร REGION
-        image: ${{ env.IMAGE_TAG }}           # ดึงตัวแปร IMAGE_TAG จากขั้นตอนที่แล้วมาใช้เลย ไม่ต้องพิมพ์ยาวๆ ซ้ำ
+        region: ${{ env.REGION }}
+        image: ${{ env.IMAGE_TAG }}
         flags: '--allow-unauthenticated'
         env_vars: |
           OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
