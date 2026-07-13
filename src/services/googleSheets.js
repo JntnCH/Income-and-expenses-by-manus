@@ -6,7 +6,18 @@ const { google } = require('googleapis');
  */
 
 function getAuthClient() {
-  const privateKey = (process.env.GOOGLE_PRIVATE_KEY || '').replace(/\\n/g, '\n');
+  let privateKey = process.env.GOOGLE_PRIVATE_KEY || '';
+  
+  // จัดการกับปัญหาเรื่องการขึ้นบรรทัดใหม่และเครื่องหมายอัญประกาศที่อาจติดมา
+  if (privateKey.includes('\\n')) {
+    privateKey = privateKey.replace(/\\n/g, '\n');
+  }
+  
+  // ลบเครื่องหมาย " ที่อาจจะติดมาจากการตั้งค่าในบาง Platform (เช่น Railway/Vercel)
+  if (privateKey.startsWith('"') && privateKey.endsWith('"')) {
+    privateKey = privateKey.substring(1, privateKey.length - 1);
+  }
+
   return new google.auth.JWT(
     process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
     null,
