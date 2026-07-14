@@ -8,12 +8,10 @@ const { google } = require('googleapis');
 function getAuthClient() {
   let privateKey = process.env.GOOGLE_PRIVATE_KEY || '';
   
-  // จัดการกับปัญหาเรื่องการขึ้นบรรทัดใหม่และเครื่องหมายอัญประกาศที่อาจติดมา
   if (privateKey.includes('\\n')) {
     privateKey = privateKey.replace(/\\n/g, '\n');
   }
   
-  // ลบเครื่องหมาย " ที่อาจจะติดมาจากการตั้งค่าในบาง Platform (เช่น Railway/Vercel)
   if (privateKey.startsWith('"') && privateKey.endsWith('"')) {
     privateKey = privateKey.substring(1, privateKey.length - 1);
   }
@@ -108,6 +106,7 @@ async function getBalanceSummary() {
   const spreadsheetId = process.env.GOOGLE_SPREADSHEET_ID;
   const dashboardSheetName = 'BotDashboard'; 
 
+  // ดึงข้อมูลจากชีต BotDashboard เท่านั้น
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId,
     range: `${dashboardSheetName}!A1:I40`
@@ -126,31 +125,27 @@ async function getBalanceSummary() {
 
   const todayItems = [];
 
-  // --- 2. ดึงรายการรายวันฝั่งรายรับ (เริ่มแถว 8 คือ index 7 เป็นต้นไป) ---
-  // A8:วันที่, B8:รายรับ, C8:จำนวนเงิน, D8:หมวดหมู่
+  // --- 2. ดึงรายการรายวันจาก BotDashboard (แถวที่ 8 เป็นต้นไป) ---
+  // รายรับ: B8:รายรับ, C8:จำนวนเงิน
+  // รายจ่าย: G8:รายจ่าย, H8:จำนวนเงิน
   for (let i = 7; i < rows.length; i++) {
     const row = rows[i];
-    if (!row || row.length < 3) continue;
+    if (!row) continue;
     
-    const incItem = row[1]; // B
-    const incAmount = parseFloat(String(row[2] || 0).replace(/,/g, '')); // C
-    
+    // ตรวจสอบฝั่งรายรับ (คอลัมน์ B, C)
+    const incItem = row[1];
+    const incAmount = parseFloat(String(row[2] || 0).replace(/,/g, ''));
     if (incItem && incItem !== 'รายรับ' && incItem !== 'วันที่' && !isNaN(incAmount) && incAmount > 0) {
       todayItems.push({ item: incItem, type: 'รายรับ', amount: incAmount });
     }
-  }
 
-  // --- 3. ดึงรายการรายวันฝั่งรายจ่าย (เริ่มแถว 8 คือ index 7 เป็นต้นไป) ---
-  // F8:วันที่, G8:รายจ่าย, H8:จำนวนเงิน, I8:หมวดหมู่
-  for (let i = 7; i < rows.length; i++) {
-    const row = rows[i];
-    if (!row || row.length < 8) continue;
-    
-    const expItem = row[6]; // G (index 6)
-    const expAmount = parseFloat(String(row[7] || 0).replace(/,/g, '')); // H (index 7)
-    
-    if (expItem && expItem !== 'รายจ่าย' && expItem !== 'วันที่' && !isNaN(expAmount) && expAmount > 0) {
-      todayItems.push({ item: expItem, type: 'รายจ่าย', amount: expAmount });
+    // ตรวจสอบฝั่งรายจ่าย (คอลัมน์ G, H)
+    if (row.length >= 8) {
+      const expItem = row[6];
+      const expAmount = parseFloat(String(row[7] || 0).replace(/,/g, ''));
+      if (expItem && expItem !== 'รายจ่าย' && expItem !== 'วันที่' && !isNaN(expAmount) && expAmount > 0) {
+        todayItems.push({ item: expItem, type: 'รายจ่าย', amount: expAmount });
+      }
     }
   }
 

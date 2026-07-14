@@ -67,29 +67,32 @@ function buildSellInvestmentConfirmation(assetName, assetType, quantity, pricePe
 }
 
 /**
- * สรุปยอดคงเหลือ
+ * สรุปยอดคงเหลือ ตามรูปแบบที่ผู้ใช้ต้องการ (จากรูปภาพ)
+ * ปรับปรุง: ตัด Markdown Table และ Header ส่วนเกินออก
  */
 function buildBalanceSummary(summary) {
   let itemsText = '';
   if (summary.todayItems && summary.todayItems.length > 0) {
     itemsText = summary.todayItems
-      .map(i => {
-        return `- ${i.item} ${formatAmount(i.amount)} บาท`;
-      })
+      .map(i => `- ${i.item} ${formatAmount(i.amount)} บาท`)
       .join('\n');
   } else {
-    itemsText = 'ยังไม่มีรายการวันนี้';
+    itemsText = '- ยังไม่มีรายการวันนี้';
   }
 
-  return `📅 ยอดประจำวันที่ ${summary.formattedDate}\n` +
+  return (
+    `📅 ยอดประจำวันที่ ${summary.formattedDate}\n` +
     `📋 ข้อมูลจาก: ${summary.summarySheet}\n\n` +
-    `📝 รายการวันนี้\n${itemsText}\n\n` +
+    `📝 รายการวันนี้\n` +
+    `${itemsText}\n\n` +
     `💸 รายรับวันนี้  ${formatAmount(summary.dailyIncome)} บาท\n` +
-    `🛍️ รายจ่ายวันนี้  ${formatAmount(summary.dailyExpense)} บาท\n\n` +
+    `🛍️ รายจ่ายวันนี้ ${formatAmount(summary.dailyExpense)} บาท\n\n` +
     `💰 รายรับเดือนนี้  ${formatAmount(summary.monthlyIncome)} บาท\n` +
     `📄 รายจ่ายเดือนนี้  ${formatAmount(summary.monthlyExpense)} บาท\n\n` +
-    `🪙 ยอดคงเหลือ ${formatAmount(summary.balance)} บาท`;
-  }
+    `🪙 ยอดคงเหลือ ${formatAmount(summary.balance)} บาท`
+  );
+}
+
 /**
  * จัดรูปแบบตัวเลขเงิน
  */
