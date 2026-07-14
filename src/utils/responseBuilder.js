@@ -68,6 +68,7 @@ function buildSellInvestmentConfirmation(assetName, assetType, quantity, pricePe
 
 /**
  * สรุปยอดคงเหลือ ตามรูปแบบที่ผู้ใช้ต้องการ (จากรูปภาพ)
+ * ปรับปรุง: ตัด Markdown Table และ Header ส่วนเกินออก
  */
 function buildBalanceSummary(summary) {
   let itemsText = '';
