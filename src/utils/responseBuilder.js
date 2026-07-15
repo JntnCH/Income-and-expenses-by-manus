@@ -23,11 +23,11 @@ function buildDialogflowResponse(text) {
  * @param {string} category - หมวดหมู่
  */
 function buildConfirmationMessage(type, item, amount, category) {
-  return `✍️ ฉันบันทึก ${item}\n` +
-         `📂 ประเภท: ${type} \n` +
-         `📝 หมวดหมู่:${category}\n\n` +
-         `💵 จำนวน ${formatAmount(amount)} บาท\n\n` +
-         `✅ บันทึกให้คุณเรียบร้อยแล้ว`;
+  return `✍️ ฉันบันทึก : ${item}\n` +
+         `📂 ประเภท : ${type} \n` +
+         `📝 หมวดหมู่ : ${category}\n` +
+         `💵 จำนวน ${formatAmount(amount)} บาท\n` +
+         `✅ ให้คุณเรียบร้อยแล้ว`;
 }
 
 /**
