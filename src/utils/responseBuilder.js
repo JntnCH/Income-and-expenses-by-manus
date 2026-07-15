@@ -30,7 +30,7 @@ function buildIncomeConfirmation(item, amount, category) {
 function buildExpenseConfirmation(item, amount, category) {
   return `📝 ฉันบันทึก ${item}\n` +
          `📂 ประเภท รายจ่าย \n'+
-         '-${category}\n\n` +
+         '-${category}\n` +
          `💵 จำนวน ${formatAmount(amount)} บาท\n\n` +
          `✅ ให้คุณเรียบร้อยแล้ว`;
 }
