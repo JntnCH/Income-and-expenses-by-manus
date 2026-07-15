@@ -35,6 +35,38 @@ function buildExpenseConfirmation(item, amount, category, account) {
 }
 
 /**
+ * ยืนยันการบันทึกการซื้อสินทรัพย์
+ */
+function buildBuyInvestmentConfirmation(assetName, assetType, quantity, pricePerUnit, totalAmount) {
+  let lines = [];
+  lines.push(`📝 ฉันบันทึก ซื้อ${assetType}`);
+  lines.push(`📈 สินทรัพย์: ${assetName}`);
+  lines.push('');
+  if (quantity > 0) lines.push(`📦 จำนวน: ${quantity}`);
+  if (pricePerUnit > 0) lines.push(`💲 ราคา/หน่วย: ${formatAmount(pricePerUnit)} บาท`);
+  if (totalAmount > 0) lines.push(`💵 ยอดรวม: ${formatAmount(totalAmount)} บาท`);
+  lines.push('');
+  lines.push('✅ ให้คุณเรียบร้อยแล้ว');
+  return lines.join('\n');
+}
+
+/**
+ * ยืนยันการบันทึกการขายสินทรัพย์
+ */
+function buildSellInvestmentConfirmation(assetName, assetType, quantity, pricePerUnit, totalAmount) {
+  let lines = [];
+  lines.push(`📝 ฉันบันทึก ขาย${assetType}`);
+  lines.push(`📈 สินทรัพย์: ${assetName}`);
+  lines.push('');
+  if (quantity > 0) lines.push(`📦 จำนวน: ${quantity}`);
+  if (pricePerUnit > 0) lines.push(`💲 ราคา/หน่วย: ${formatAmount(pricePerUnit)} บาท`);
+  if (totalAmount > 0) lines.push(`💵 ยอดรวม: ${formatAmount(totalAmount)} บาท`);
+  lines.push('');
+  lines.push('✅ ให้คุณเรียบร้อยแล้ว');
+  return lines.join('\n');
+}
+
+/**
  * สรุปยอดคงเหลือ ตามรูปแบบที่ผู้ใช้ต้องการ (จากรูปภาพ)
  * เพิ่ม: การแสดงผลยอดแยกตามบัญชี (Account Balances)
  */
@@ -85,6 +117,8 @@ module.exports = {
   buildDialogflowResponse,
   buildIncomeConfirmation,
   buildExpenseConfirmation,
+  buildBuyInvestmentConfirmation,
+  buildSellInvestmentConfirmation,
   buildBalanceSummary,
   formatAmount,
 };
