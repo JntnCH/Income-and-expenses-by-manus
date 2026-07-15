@@ -18,9 +18,9 @@ function buildDialogflowResponse(text) {
  * ยืนยันการบันทึกรายรับ/รายจ่าย พร้อมแสดงบัญชี (Account)
  */
 function buildTransactionConfirmation(type, item, amount, category, account) {
-  const emoji = type === 'รายรับ' ? '💰' : '🛍️';
   return `📝 ฉันบันทึก ${item}\n` +
-         `📂 ประเภท ${type} : ${category}\n` +
+         `📂 ประเภท : ${type} : 
+         '📦 หมวดหมู่ : ${category}\n` +
          `💳 บัญชี : ${account || 'เงินสด'}\n\n` +
          `💵 จำนวน ${formatAmount(amount)} บาท\n\n` +
          `✅ ให้คุณเรียบร้อยแล้ว`;
