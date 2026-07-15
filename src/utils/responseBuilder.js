@@ -17,21 +17,18 @@ function buildDialogflowResponse(text) {
 /**
  * ยืนยันการบันทึกรายรับ
  */
-function buildIncomeConfirmation(item, amount, category) {
-  return `📝 ฉันบันทึก ${item}\n` +
-         `📂 ประเภท รายรับ : ${category} \n\n` +
-         `💵 จำนวน ${formatAmount(amount)} บาท\n\n` +
-         `✅ ให้คุณเรียบร้อยแล้ว`;
-}
-
 /**
- * ยืนยันการบันทึกรายจ่าย
+ * สร้างข้อความยืนยันการบันทึก (รองรับทั้งรายรับและรายจ่าย)
+ * @param {string} type - ประเภทธุรกรรม ('รายรับ' หรือ 'รายจ่าย')
+ * @param {string} item - ชื่อรายการ
+ * @param {number} amount - จำนวนเงิน
+ * @param {string} category - หมวดหมู่
  */
-function buildExpenseConfirmation(item, amount, category) {
-  return `📝 ฉันบันทึก ${item}\n` +
-         `📂 ประเภท รายจ่าย \n'+'-${category}\n` +
-         `💵 จำนวน ${formatAmount(amount)} บาท\n` +
-         `✅ ให้คุณเรียบร้อยแล้ว`;
+function buildConfirmationMessage(type, item, amount, category) {
+  return `📂 ประเภท: ${type} - ${category}\n` +
+         `📝 รายการ: ${item}\n` +
+         `💵 จำนวน ${formatAmount(amount)} บาท\n\n` +
+         `✅ บันทึกให้คุณเรียบร้อยแล้ว`;
 }
 
 /**
