@@ -85,20 +85,20 @@ function buildBalanceSummary(summary) {
   if (summary.accountBalances && summary.accountBalances.length > 0) {
     accountText = '\n\n🏦 ยอดแยกตามบัญชี\n' + 
       summary.accountBalances
-        .map(acc => `• ${acc.name}: ${formatAmount(acc.amount)} บาท`)
+        .map(acc => ` - ${acc.name} : ${formatAmount(acc.amount)} บาท`)
         .join('\n');
   }
 
   return (
     `📅 ยอดประจำวันที่ ${summary.formattedDate}\n` +
-    `📋 ข้อมูลจาก: ${summary.summarySheet}\n\n` +
+    `📋 ข้อมูลจากชีต : ${summary.summarySheet}\n\n` +
     `📝 รายการวันนี้\n` +
     `${itemsText}\n\n` +
     `💸 รายรับวันนี้  ${formatAmount(summary.dailyIncome)} บาท\n` +
     `🛍️ รายจ่ายวันนี้ ${formatAmount(summary.dailyExpense)} บาท\n\n` +
     `💰 รายรับเดือนนี้  ${formatAmount(summary.monthlyIncome)} บาท\n` +
-    `📄 รายจ่ายเดือนนี้  ${formatAmount(summary.monthlyExpense)} บาท\n\n` +
-    `🪙 ยอดคงเหลือ ${formatAmount(summary.balance)} บาท` +
+    `🛒 รายจ่ายเดือนนี้  ${formatAmount(summary.monthlyExpense)} บาท\n\n` +
+    `🪙 ยอดรวมทุกบัญชี ${formatAmount(summary.balance)} บาท` +
     `${accountText}`
   );
 }
