@@ -77,17 +77,23 @@ function buildBalanceSummary(summary) {
     itemsText = '- ยังไม่มีรายการวันนี้';
   }
 
-  return (
-    `📅 ยอดประจำวันที่ ${summary.formattedDate}\n` +
-    `📋 ข้อมูลจาก : ${summary.summarySheet}\n\n` +
-    `📝 รายการวันนี้\n` +
-    `${itemsText}\n\n` +
-    `💸 รายรับวันนี้  ${formatAmount(summary.dailyIncome)} บาท\n` +
-    `🛍️ รายจ่ายวันนี้ ${formatAmount(summary.dailyExpense)} บาท\n\n` +
-    `💰 รายรับเดือนนี้  ${formatAmount(summary.monthlyIncome)} บาท\n` +
-    `📄 รายจ่ายเดือนนี้  ${formatAmount(summary.monthlyExpense)} บาท\n\n` +
-    `🪙 ยอดคงเหลือ ${formatAmount(summary.balance)} บาท`
-  );
+function buildSummaryMessage(summary, itemsText) {
+  return `📅 *ยอดประจำวันที่ ${summary.formattedDate}*
+📋 ข้อมูลจาก : ${summary.summarySheet}
+
+━━━━━━━━━━━━━━━━━━━━
+📝 *รายการวันนี้*
+${itemsText}
+━━━━━━━━━━━━━━━━━━━━
+
+💸 รายรับวันนี้: ${formatAmount(summary.dailyIncome)} บาท
+🛍️ รายจ่ายวันนี้: ${formatAmount(summary.dailyExpense)} บาท
+
+💰 รายรับเดือนนี้: ${formatAmount(summary.monthlyIncome)} บาท
+📄 รายจ่ายเดือนนี้: ${formatAmount(summary.monthlyExpense)} บาท
+
+🪙 *ยอดคงเหลือ: ${formatAmount(summary.balance)} บาท*`;
+}
 }
 
 /**
