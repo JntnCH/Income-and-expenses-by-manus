@@ -19,8 +19,8 @@ function buildDialogflowResponse(text) {
  */
 function buildTransactionConfirmation(type, item, amount, category, account) {
   return `📝 ฉันบันทึก ${item}\n` +
-         `📂 ประเภท : ${type} \n'
-         '📦 หมวดหมู่ : ${category}\n` +
+         `📂 ประเภท : ${type}\n` +
+         `📦 หมวดหมู่ : ${category}\n` +
          `💳 บัญชี : ${account || 'เงินสด'}\n` +
          `💵 จำนวน ${formatAmount(amount)} บาท\n` +
          `✅ ให้คุณเรียบร้อยแล้ว`;
