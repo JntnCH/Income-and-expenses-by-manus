@@ -29,7 +29,8 @@ function buildIncomeConfirmation(item, amount, category) {
  */
 function buildExpenseConfirmation(item, amount, category) {
   return `📝 ฉันบันทึก ${item}\n` +
-         `📂 ประเภท รายจ่าย : ${category}\n\n` +
+         `📂 ประเภท รายจ่าย \n'+
+         '-${category}\n\n` +
          `💵 จำนวน ${formatAmount(amount)} บาท\n\n` +
          `✅ ให้คุณเรียบร้อยแล้ว`;
 }
@@ -82,7 +83,7 @@ function buildBalanceSummary(summary) {
 
   return (
     `📅 ยอดประจำวันที่ ${summary.formattedDate}\n` +
-    `📋 ข้อมูลจาก: ${summary.summarySheet}\n\n` +
+    `📋 ข้อมูลจาก : ${summary.summarySheet}\n\n` +
     `📝 รายการวันนี้\n` +
     `${itemsText}\n\n` +
     `💸 รายรับวันนี้  ${formatAmount(summary.dailyIncome)} บาท\n` +
