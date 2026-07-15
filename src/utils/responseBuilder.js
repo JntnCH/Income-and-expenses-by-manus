@@ -24,7 +24,7 @@ function buildDialogflowResponse(text) {
  */
 function buildConfirmationMessage(type, item, amount, category) {
   return `📂 ประเภท: ${type} - ${category}\n` +
-         `📝 รายการ: ${item}\n` +
+         ` รายการ: ${item}\n` +
          `💵 จำนวน ${formatAmount(amount)} บาท\n\n` +
          `✅ บันทึกให้คุณเรียบร้อยแล้ว`;
 }
@@ -73,8 +73,8 @@ function buildBalanceSummary(summary) {
  * @param {string} itemsText - ข้อความรายการวันนี้
  */
 function buildSummaryMessage(summary, itemsText) {
-  return `📅 *ยอดประจำวันที่ ${summary.formattedDate}*
-📋 ข้อมูลจาก : ${summary.summarySheet}
+  return ` *ยอดประจำวันที่ ${summary.formattedDate}*
+📋 ข้อมูลจาก: ${summary.summarySheet}
 
 ━━━━━━━━━━━━━━━━━━━━
 📝 *รายการวันนี้*
@@ -85,7 +85,7 @@ ${itemsText}
 🛍️ รายจ่ายวันนี้: ${formatAmount(summary.dailyExpense)} บาท
 
 💰 รายรับเดือนนี้: ${formatAmount(summary.monthlyIncome)} บาท
-📄 รายจ่ายเดือนนี้: ${formatAmount(summary.monthlyExpense)} บาท
+ รายจ่ายเดือนนี้: ${formatAmount(summary.monthlyExpense)} บาท
 
 🪙 *ยอดคงเหลือ: ${formatAmount(summary.balance)} บาท*`;
 }

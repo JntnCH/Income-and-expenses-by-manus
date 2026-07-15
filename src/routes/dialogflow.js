@@ -5,10 +5,8 @@ const { queryExcelData } = require("../services/excelQueryService");
 const { extractUser, formatUserLabel } = require('../utils/userExtractor');
 const {
   buildDialogflowResponse,
-  buildIncomeConfirmation,
-  buildExpenseConfirmation,
-  buildBuyInvestmentConfirmation,
-  buildSellInvestmentConfirmation,
+  buildConfirmationMessage,      // ✅ ฟังก์ชันใหม่ (รวมรายรับ+รายจ่าย)
+  buildInvestmentConfirmation,   // ✅ ฟังก์ชันใหม่ (รวมซื้อ+ขาย)
   buildBalanceSummary
 } = require('../utils/responseBuilder');
 
@@ -21,7 +19,6 @@ router.post('/dialogflow', async (req, res) => {
     const body = req.body;
     const intentName = body?.queryResult?.intent?.displayName;
     const parameters = body?.queryResult?.parameters || {};
-
     const userInfo = extractUser(body);
     const recorderLabel = formatUserLabel(userInfo);
 
@@ -38,11 +35,11 @@ router.post('/dialogflow', async (req, res) => {
     const expenseCategory = extractEntity(parameters, ['Expense-category', 'expense-category']);
     
     // ดึงชื่อรายการ (item)
-    const item = parameters.item || 
-                 parameters.Income_categoryoriginal || 
-                 parameters['Expense-categoryoriginal'] || 
-                 incomeCategory || 
-                 expenseCategory || 
+    const item = parameters.item ||
+                 parameters.Income_categoryoriginal ||
+                 parameters['Expense-categoryoriginal'] ||
+                 incomeCategory ||
+                 expenseCategory ||
                  'ไม่ระบุ';
 
     let responseText = '';
@@ -58,7 +55,7 @@ router.post('/dialogflow', async (req, res) => {
           platform: userInfo.platform,
           recorder: recorderLabel
         });
-        responseText = buildIncomeConfirmation(item, amount, category);
+        responseText = buildConfirmationMessage('รายรับ', item, amount, category); // ✅ ใช้ฟังก์ชันใหม่
         break;
       }
 
@@ -72,7 +69,7 @@ router.post('/dialogflow', async (req, res) => {
           platform: userInfo.platform,
           recorder: recorderLabel
         });
-        responseText = buildExpenseConfirmation(item, amount, category);
+        responseText = buildConfirmationMessage('รายจ่าย', item, amount, category); // ✅ ใช้ฟังก์ชันใหม่
         break;
       }
 
@@ -107,12 +104,7 @@ router.post('/dialogflow', async (req, res) => {
           platform: userInfo.platform,
           recorder: recorderLabel
         });
-        
-        if (action === 'ซื้อ') {
-          responseText = buildBuyInvestmentConfirmation(assetName, assetType, quantity, pricePerUnit, totalAmount);
-        } else {
-          responseText = buildSellInvestmentConfirmation(assetName, assetType, quantity, pricePerUnit, totalAmount);
-        }
+        responseText = buildInvestmentConfirmation(action, assetName, assetType, quantity, pricePerUnit, totalAmount); // ✅ ใช้ฟังก์ชันเดียว
         break;
       }
 
@@ -141,11 +133,13 @@ router.post('/dialogflow', async (req, res) => {
   } catch (error) {
     console.error('[DIALOGFLOW ERROR]', error.message);
     let errorMsg = '❌ เกิดข้อผิดพลาดในการประมวลผล';
+    
     if (error.message.includes('auth') || error.message.includes('grant')) {
-      errorMsg = '❌ ปัญหาการยืนยันตัวตน Google: กรุณาตรวจสอบ Service Account Key ใน .env';
+      errorMsg = ' ปัญหาการยืนยันตัวตน Google: กรุณาตรวจสอบ Service Account Key ใน .env';
     } else if (error.message.includes('spreadsheet') || error.message.includes('found')) {
       errorMsg = '❌ หาไฟล์ Google Sheets ไม่พบ: กรุณาตรวจสอบ ID และการ Share สิทธิ์';
     }
+    
     return res.json(buildDialogflowResponse(`${errorMsg}\n(รายละเอียด: ${error.message})`));
   }
 });
@@ -153,7 +147,6 @@ router.post('/dialogflow', async (req, res) => {
 // ============================================================
 // Helper Functions
 // ============================================================
-
 function extractAmount(parameters) {
   if (parameters.amount) return parseFloat(parameters.amount);
   if (parameters.number) return parseFloat(parameters.number);
