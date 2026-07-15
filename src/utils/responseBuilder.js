@@ -24,9 +24,9 @@ function buildDialogflowResponse(text) {
  */
 function buildConfirmationMessage(type, item, amount, category) {
   return `✍️ ฉันบันทึก : ${item}\n` +
-         `📂 ประเภท : ${type} \n` +
+         `📂 ประเภท  : ${type} \n` +
          `📝 หมวดหมู่ : ${category}\n` +
-         `💵 จำนวน ${formatAmount(amount)} บาท\n` +
+         `💵 จำนวน  ${formatAmount(amount)} บาท\n` +
          `✅ ให้คุณเรียบร้อยแล้ว`;
 }
 
@@ -41,13 +41,14 @@ function buildConfirmationMessage(type, item, amount, category) {
  */
 function buildInvestmentConfirmation(action, assetName, assetType, quantity, pricePerUnit, totalAmount) {
   let lines = [];
-  lines.push(`📂 ประเภท: ${action}${assetType}`);
+  lines.push(`📝 ฉัน ${action}`);
+  lines.push(`📂 ประเภท: ${assetType}`);
   lines.push(`📈 สินทรัพย์: ${assetName}`);
   if (quantity > 0) lines.push(`📦 จำนวน: ${quantity}`);
   if (pricePerUnit > 0) lines.push(`💲 ราคา/หน่วย: ${formatAmount(pricePerUnit)} บาท`);
   if (totalAmount > 0) lines.push(`💵 ยอดรวม: ${formatAmount(totalAmount)} บาท`);
   lines.push('');
-  lines.push('✅ บันทึกให้คุณเรียบร้อยแล้ว');
+  lines.push('✅ ให้คุณเรียบร้อยแล้ว');
   return lines.join('\n');
 }
 
@@ -80,13 +81,13 @@ function buildSummaryMessage(summary, itemsText) {
 📝 รายการวันนี้
 ${itemsText}
 ━━━━━━━━━━━━━━━━━━
-💸 รายรับวันนี้: ${formatAmount(summary.dailyIncome)} บาท
-🛍️ รายจ่ายวันนี้: ${formatAmount(summary.dailyExpense)} บาท
+💸 รายรับวันนี้ : ${formatAmount(summary.dailyIncome)} บาท
+🛍️ รายจ่ายวันนี้ : ${formatAmount(summary.dailyExpense)} บาท
 
-💰 รายรับเดือนนี้: ${formatAmount(summary.monthlyIncome)} บาท
-🧾 รายจ่ายเดือนนี้: ${formatAmount(summary.monthlyExpense)} บาท
+💰 รายรับเดือนนี้ : ${formatAmount(summary.monthlyIncome)} บาท
+🧾 รายจ่ายเดือนนี้ : ${formatAmount(summary.monthlyExpense)} บาท
 
-🪙 ยอดคงเหลือ: ${formatAmount(summary.balance)} บาท`;
+🪙 ยอดคงเหลือ : ${formatAmount(summary.balance)} บาท`;
 }
 
 /**
