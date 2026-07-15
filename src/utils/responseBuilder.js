@@ -5,6 +5,7 @@
 
 /**
  * สร้าง Dialogflow Fulfillment Response
+ * @param {string} text - ข้อความที่ต้องการตอบกลับ
  */
 function buildDialogflowResponse(text) {
   return {
@@ -14,9 +15,6 @@ function buildDialogflowResponse(text) {
   };
 }
 
-/**
- * ยืนยันการบันทึกรายรับ
- */
 /**
  * สร้างข้อความยืนยันการบันทึก (รองรับทั้งรายรับและรายจ่าย)
  * @param {string} type - ประเภทธุรกรรม ('รายรับ' หรือ 'รายจ่าย')
@@ -32,40 +30,29 @@ function buildConfirmationMessage(type, item, amount, category) {
 }
 
 /**
- * ยืนยันการบันทึกการซื้อสินทรัพย์
+ * สร้างข้อความยืนยันการซื้อ/ขายสินทรัพย์ (รวมเป็นฟังก์ชันเดียว)
+ * @param {string} action - การกระทำ ('ซื้อ' หรือ 'ขาย')
+ * @param {string} assetName - ชื่อสินทรัพย์
+ * @param {string} assetType - ประเภทสินทรัพย์ (หุ้น, คริปโต, ฯลฯ)
+ * @param {number} quantity - จำนวน
+ * @param {number} pricePerUnit - ราคาต่อหน่วย
+ * @param {number} totalAmount - ยอดรวม
  */
-function buildBuyInvestmentConfirmation(assetName, assetType, quantity, pricePerUnit, totalAmount) {
+function buildInvestmentConfirmation(action, assetName, assetType, quantity, pricePerUnit, totalAmount) {
   let lines = [];
-  lines.push(`📝 ฉันบันทึก ซื้อ${assetType}`);
+  lines.push(`📂 ประเภท: ${action}${assetType}`);
   lines.push(`📈 สินทรัพย์: ${assetName}`);
-  lines.push('');
   if (quantity > 0) lines.push(`📦 จำนวน: ${quantity}`);
   if (pricePerUnit > 0) lines.push(`💲 ราคา/หน่วย: ${formatAmount(pricePerUnit)} บาท`);
   if (totalAmount > 0) lines.push(`💵 ยอดรวม: ${formatAmount(totalAmount)} บาท`);
   lines.push('');
-  lines.push('✅ ให้คุณเรียบร้อยแล้ว');
+  lines.push('✅ บันทึกให้คุณเรียบร้อยแล้ว');
   return lines.join('\n');
 }
 
 /**
- * ยืนยันการบันทึกการขายสินทรัพย์
- */
-function buildSellInvestmentConfirmation(assetName, assetType, quantity, pricePerUnit, totalAmount) {
-  let lines = [];
-  lines.push(`📝 ฉันบันทึก ขาย${assetType}`);
-  lines.push(`📈 สินทรัพย์: ${assetName}`);
-  lines.push('');
-  if (quantity > 0) lines.push(`📦 จำนวน: ${quantity}`);
-  if (pricePerUnit > 0) lines.push(`💲 ราคา/หน่วย: ${formatAmount(pricePerUnit)} บาท`);
-  if (totalAmount > 0) lines.push(`💵 ยอดรวม: ${formatAmount(totalAmount)} บาท`);
-  lines.push('');
-  lines.push('✅ ให้คุณเรียบร้อยแล้ว');
-  return lines.join('\n');
-}
-
-/**
- * สรุปยอดคงเหลือ ตามรูปแบบที่ผู้ใช้ต้องการ (จากรูปภาพ)
- * ปรับปรุง: ตัด Markdown Table และ Header ส่วนเกินออก
+ * สรุปยอดคงเหลือ (เรียกใช้ buildSummaryMessage ภายใน)
+ * @param {Object} summary - ข้อมูลสรุปยอด
  */
 function buildBalanceSummary(summary) {
   let itemsText = '';
@@ -76,7 +63,15 @@ function buildBalanceSummary(summary) {
   } else {
     itemsText = '- ยังไม่มีรายการวันนี้';
   }
+  
+  return buildSummaryMessage(summary, itemsText);
+}
 
+/**
+ * สร้างข้อความสรุปยอด (รูปแบบที่ปรับปรุงแล้ว)
+ * @param {Object} summary - ข้อมูลสรุปยอด
+ * @param {string} itemsText - ข้อความรายการวันนี้
+ */
 function buildSummaryMessage(summary, itemsText) {
   return `📅 *ยอดประจำวันที่ ${summary.formattedDate}*
 📋 ข้อมูลจาก : ${summary.summarySheet}
@@ -94,10 +89,10 @@ ${itemsText}
 
 🪙 *ยอดคงเหลือ: ${formatAmount(summary.balance)} บาท*`;
 }
-}
 
 /**
  * จัดรูปแบบตัวเลขเงิน
+ * @param {number|string} amount - จำนวนเงิน
  */
 function formatAmount(amount) {
   return parseFloat(amount || 0).toLocaleString('th-TH', {
@@ -108,10 +103,9 @@ function formatAmount(amount) {
 
 module.exports = {
   buildDialogflowResponse,
-  buildIncomeConfirmation,
-  buildExpenseConfirmation,
-  buildBuyInvestmentConfirmation,
-  buildSellInvestmentConfirmation,
+  buildConfirmationMessage,        // ✅ แทนที่ buildIncomeConfirmation และ buildExpenseConfirmation
+  buildInvestmentConfirmation,     // ✅ แทนที่ buildBuyInvestmentConfirmation และ buildSellInvestmentConfirmation
   buildBalanceSummary,
+  buildSummaryMessage,             // ✅ เพิ่มเข้ามา (แยกออกมาให้เรียกใช้ตรงๆ ได้)
   formatAmount,
 };
