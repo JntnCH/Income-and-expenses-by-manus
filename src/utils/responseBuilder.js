@@ -23,8 +23,9 @@ function buildDialogflowResponse(text) {
  * @param {string} category - หมวดหมู่
  */
 function buildConfirmationMessage(type, item, amount, category) {
-  return `📂 ประเภท: ${type} - ${category}\n` +
-         ` รายการ: ${item}\n` +
+  return `✍️ ฉันบันทึก ${item}\n` +
+         `📂 ประเภท: ${type} \n` +
+         `📝 หมวดหมู่:${category}\n\n` +
          `💵 จำนวน ${formatAmount(amount)} บาท\n\n` +
          `✅ บันทึกให้คุณเรียบร้อยแล้ว`;
 }
@@ -73,21 +74,19 @@ function buildBalanceSummary(summary) {
  * @param {string} itemsText - ข้อความรายการวันนี้
  */
 function buildSummaryMessage(summary, itemsText) {
-  return ` *ยอดประจำวันที่ ${summary.formattedDate}*
-📋 ข้อมูลจาก: ${summary.summarySheet}
-
-━━━━━━━━━━━━━━━━━━━━
-📝 *รายการวันนี้*
+  return `ยอดประจำวันที่ ${summary.formattedDate}
+📋 ข้อมูลจาก : ${summary.summarySheet}
+━━━━━━━━━━━━━━━━━━
+📝 รายการวันนี้
 ${itemsText}
-━━━━━━━━━━━━━━━━━━━━
-
+━━━━━━━━━━━━━━━━━━
 💸 รายรับวันนี้: ${formatAmount(summary.dailyIncome)} บาท
 🛍️ รายจ่ายวันนี้: ${formatAmount(summary.dailyExpense)} บาท
 
 💰 รายรับเดือนนี้: ${formatAmount(summary.monthlyIncome)} บาท
- รายจ่ายเดือนนี้: ${formatAmount(summary.monthlyExpense)} บาท
+🧾 รายจ่ายเดือนนี้: ${formatAmount(summary.monthlyExpense)} บาท
 
-🪙 *ยอดคงเหลือ: ${formatAmount(summary.balance)} บาท*`;
+🪙 ยอดคงเหลือ: ${formatAmount(summary.balance)} บาท`;
 }
 
 /**
