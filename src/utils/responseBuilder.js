@@ -15,60 +15,28 @@ function buildDialogflowResponse(text) {
 }
 
 /**
- * ยืนยันการบันทึกรายรับ
+ * ยืนยันการบันทึกรายรับ/รายจ่าย พร้อมแสดงบัญชี (Account)
  */
-function buildIncomeConfirmation(item, amount, category) {
+function buildTransactionConfirmation(type, item, amount, category, account) {
+  const emoji = type === 'รายรับ' ? '💰' : '🛍️';
   return `📝 ฉันบันทึก ${item}\n` +
-         `📂 ประเภท รายรับ : ${category} \n\n` +
+         `📂 ประเภท ${type} : ${category}\n` +
+         `💳 บัญชี : ${account || 'เงินสด'}\n\n` +
          `💵 จำนวน ${formatAmount(amount)} บาท\n\n` +
          `✅ ให้คุณเรียบร้อยแล้ว`;
 }
 
-/**
- * ยืนยันการบันทึกรายจ่าย
- */
-function buildExpenseConfirmation(item, amount, category) {
-  return `📝 ฉันบันทึก ${item}\n` +
-         `📂 ประเภท รายจ่าย : ${category}\n\n` +
-         `💵 จำนวน ${formatAmount(amount)} บาท\n\n` +
-         `✅ ให้คุณเรียบร้อยแล้ว`;
+function buildIncomeConfirmation(item, amount, category, account) {
+  return buildTransactionConfirmation('รายรับ', item, amount, category, account);
 }
 
-/**
- * ยืนยันการบันทึกการซื้อสินทรัพย์
- */
-function buildBuyInvestmentConfirmation(assetName, assetType, quantity, pricePerUnit, totalAmount) {
-  let lines = [];
-  lines.push(`📝 ฉันบันทึก ซื้อ${assetType}`);
-  lines.push(`📈 สินทรัพย์: ${assetName}`);
-  lines.push('');
-  if (quantity > 0) lines.push(`📦 จำนวน: ${quantity}`);
-  if (pricePerUnit > 0) lines.push(`💲 ราคา/หน่วย: ${formatAmount(pricePerUnit)} บาท`);
-  if (totalAmount > 0) lines.push(`💵 ยอดรวม: ${formatAmount(totalAmount)} บาท`);
-  lines.push('');
-  lines.push('✅ ให้คุณเรียบร้อยแล้ว');
-  return lines.join('\n');
-}
-
-/**
- * ยืนยันการบันทึกการขายสินทรัพย์
- */
-function buildSellInvestmentConfirmation(assetName, assetType, quantity, pricePerUnit, totalAmount) {
-  let lines = [];
-  lines.push(`📝 ฉันบันทึก ขาย${assetType}`);
-  lines.push(`📈 สินทรัพย์: ${assetName}`);
-  lines.push('');
-  if (quantity > 0) lines.push(`📦 จำนวน: ${quantity}`);
-  if (pricePerUnit > 0) lines.push(`💲 ราคา/หน่วย: ${formatAmount(pricePerUnit)} บาท`);
-  if (totalAmount > 0) lines.push(`💵 ยอดรวม: ${formatAmount(totalAmount)} บาท`);
-  lines.push('');
-  lines.push('✅ ให้คุณเรียบร้อยแล้ว');
-  return lines.join('\n');
+function buildExpenseConfirmation(item, amount, category, account) {
+  return buildTransactionConfirmation('รายจ่าย', item, amount, category, account);
 }
 
 /**
  * สรุปยอดคงเหลือ ตามรูปแบบที่ผู้ใช้ต้องการ (จากรูปภาพ)
- * ปรับปรุง: ตัด Markdown Table และ Header ส่วนเกินออก
+ * เพิ่ม: การแสดงผลยอดแยกตามบัญชี (Account Balances)
  */
 function buildBalanceSummary(summary) {
   let itemsText = '';
@@ -80,6 +48,15 @@ function buildBalanceSummary(summary) {
     itemsText = '- ยังไม่มีรายการวันนี้';
   }
 
+  // สร้างส่วนแสดงยอดแยกบัญชี
+  let accountText = '';
+  if (summary.accountBalances && summary.accountBalances.length > 0) {
+    accountText = '\n\n🏦 ยอดแยกตามบัญชี\n' + 
+      summary.accountBalances
+        .map(acc => `• ${acc.name}: ${formatAmount(acc.amount)} บาท`)
+        .join('\n');
+  }
+
   return (
     `📅 ยอดประจำวันที่ ${summary.formattedDate}\n` +
     `📋 ข้อมูลจาก: ${summary.summarySheet}\n\n` +
@@ -89,7 +66,8 @@ function buildBalanceSummary(summary) {
     `🛍️ รายจ่ายวันนี้ ${formatAmount(summary.dailyExpense)} บาท\n\n` +
     `💰 รายรับเดือนนี้  ${formatAmount(summary.monthlyIncome)} บาท\n` +
     `📄 รายจ่ายเดือนนี้  ${formatAmount(summary.monthlyExpense)} บาท\n\n` +
-    `🪙 ยอดคงเหลือ ${formatAmount(summary.balance)} บาท`
+    `🪙 ยอดคงเหลือ ${formatAmount(summary.balance)} บาท` +
+    `${accountText}`
   );
 }
 
@@ -107,8 +85,6 @@ module.exports = {
   buildDialogflowResponse,
   buildIncomeConfirmation,
   buildExpenseConfirmation,
-  buildBuyInvestmentConfirmation,
-  buildSellInvestmentConfirmation,
   buildBalanceSummary,
   formatAmount,
 };

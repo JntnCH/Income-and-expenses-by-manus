@@ -29,7 +29,7 @@ router.post('/dialogflow', async (req, res) => {
     console.log(`[DIALOGFLOW] Parameters:`, JSON.stringify(parameters));
 
     // ============================================================
-    // ดึงค่า parameters พื้นฐาน (รองรับโครงสร้างเดิมจากไฟล์ ZIP)
+    // ดึงค่า parameters พื้นฐาน
     // ============================================================
     const amount = extractAmount(parameters);
     
@@ -37,6 +37,9 @@ router.post('/dialogflow', async (req, res) => {
     const incomeCategory = extractEntity(parameters, ['Income_category', 'income_category']);
     const expenseCategory = extractEntity(parameters, ['Expense-category', 'expense-category']);
     
+    // ดึงค่า Account (เช่น กสิกร, เงินสด, SCB)
+    const account = extractEntity(parameters, ['account', 'Account', 'bank']) || 'เงินสด';
+
     // ดึงชื่อรายการ (item)
     const item = parameters.item || 
                  parameters.Income_categoryoriginal || 
@@ -55,10 +58,11 @@ router.post('/dialogflow', async (req, res) => {
           type: 'รายรับ',
           amount,
           category,
+          account, // ส่งค่า Account ไปด้วย
           platform: userInfo.platform,
           recorder: recorderLabel
         });
-        responseText = buildIncomeConfirmation(item, amount, category);
+        responseText = buildIncomeConfirmation(item, amount, category, account);
         break;
       }
 
@@ -69,10 +73,11 @@ router.post('/dialogflow', async (req, res) => {
           type: 'รายจ่าย',
           amount,
           category,
+          account, // ส่งค่า Account ไปด้วย
           platform: userInfo.platform,
           recorder: recorderLabel
         });
-        responseText = buildExpenseConfirmation(item, amount, category);
+        responseText = buildExpenseConfirmation(item, amount, category, account);
         break;
       }
 

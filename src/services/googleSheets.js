@@ -2,7 +2,7 @@ const { google } = require('googleapis');
 
 /**
  * Google Sheets Service
- * ปรับปรุงใหม่ตามโครงสร้างที่ผู้ใช้กำหนด (BotDashboard)
+ * ปรับปรุงใหม่เพื่อรองรับคอลัมน์ Account และยอดแยกบัญชี
  */
 
 function getAuthClient() {
@@ -52,47 +52,22 @@ async function saveRecord(data) {
   };
   const type = typeMap[data.type] || data.type;
 
+  // โครงสร้างใหม่:
+  // A:วันที่, B:ประเภท, C:รายการ, D:จำนวนเงิน, E:หมวดหมู่, F:Account, G:ช่องทาง, H:ผู้บันทึก
   const row = [
     getBangkokDateString(),       // A: วันที่
     type,                         // B: ประเภท
     data.item || 'ไม่ระบุ',         // C: รายการ
     parseFloat(data.amount) || 0, // D: จำนวนเงิน
     data.category || 'ทั่วไป',     // E: หมวดหมู่
-    data.platform || 'Unknown',   // F: ช่องทาง
-    data.recorder || 'ไม่ระบุ'      // G: ผู้บันทึก
+    data.account || 'เงินสด',      // F: Account (บัญชีธนาคาร/เงินสด)
+    data.platform || 'Unknown',   // G: ช่องทาง
+    data.recorder || 'ไม่ระบุ'      // H: ผู้บันทึก
   ];
 
   await sheets.spreadsheets.values.append({
     spreadsheetId,
-    range: `${sheetName}!A:G`,
-    valueInputOption: 'USER_ENTERED',
-    requestBody: { values: [row] }
-  });
-
-  return { success: true, row };
-}
-
-async function saveInvestmentRecord(data) {
-  const auth = getAuthClient();
-  const sheets = google.sheets({ version: 'v4', auth });
-  const spreadsheetId = process.env.GOOGLE_SPREADSHEET_ID;
-  const investSheetName = process.env.GOOGLE_INVEST_SHEET_NAME || 'การลงทุน';
-
-  const row = [
-    getBangkokDateString(),
-    data.action || 'ซื้อ',
-    data.assetType || 'อื่นๆ',
-    data.assetName || 'ไม่ระบุ',
-    parseFloat(data.quantity) || 0,
-    parseFloat(data.pricePerUnit) || 0,
-    parseFloat(data.totalAmount) || 0,
-    data.platform || 'Unknown',
-    data.recorder || 'ไม่ระบุ'
-  ];
-
-  await sheets.spreadsheets.values.append({
-    spreadsheetId,
-    range: `${investSheetName}!A:I`,
+    range: `${sheetName}!A:H`,
     valueInputOption: 'USER_ENTERED',
     requestBody: { values: [row] }
   });
@@ -106,40 +81,50 @@ async function getBalanceSummary() {
   const spreadsheetId = process.env.GOOGLE_SPREADSHEET_ID;
   const dashboardSheetName = 'BotDashboard'; 
 
-  // ดึงข้อมูลจากชีต BotDashboard เท่านั้น
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId,
-    range: `${dashboardSheetName}!A1:I40`
+    range: `${dashboardSheetName}!A1:Z40` // ขยาย range เพื่อให้ครอบคลุมคอลัมน์ Account ด้านขวา
   });
 
   const rows = response.data.values || [];
   const bangkokNow = getBangkokNow();
 
   // --- 1. ดึงตัวเลขสรุปจากคอลัมน์ B (แถวที่ 2 ถึง 6) ---
-  // B2:รายรับวัน, B3:รายจ่ายวัน, B4:รายรับเดือน, B5:รายจ่ายเดือน, B6:ยอดคงเหลือ
   const dailyIncome   = parseFloat(String(rows[1]?.[1] || 0).replace(/,/g, ''));
   const dailyExpense  = parseFloat(String(rows[2]?.[1] || 0).replace(/,/g, ''));
   const monthlyIncome = parseFloat(String(rows[3]?.[1] || 0).replace(/,/g, ''));
   const monthlyExpense= parseFloat(String(rows[4]?.[1] || 0).replace(/,/g, ''));
   const balance       = parseFloat(String(rows[5]?.[1] || 0).replace(/,/g, ''));
 
-  const todayItems = [];
+  // --- 2. ดึงยอดเงินแยกตามบัญชี (แถว 2 และ 3 เริ่มจากคอลัมน์ F) ---
+  const accountBalances = [];
+  const accountNamesRow = rows[1] || []; // แถว 2
+  const accountAmountsRow = rows[2] || []; // แถว 3
 
-  // --- 2. ดึงรายการรายวันจาก BotDashboard (แถวที่ 8 เป็นต้นไป) ---
-  // รายรับ: B8:รายรับ, C8:จำนวนเงิน
-  // รายจ่าย: G8:รายจ่าย, H8:จำนวนเงิน
+  // วนลูปตั้งแต่คอลัมน์ F (Index 5) เป็นต้นไป
+  for (let col = 5; col < accountNamesRow.length; col++) {
+    const name = accountNamesRow[col];
+    const amountStr = accountAmountsRow[col];
+    if (name && name.trim() !== '') {
+      const amount = parseFloat(String(amountStr || 0).replace(/,/g, ''));
+      accountBalances.push({ name, amount });
+    }
+  }
+
+  // --- 3. ดึงรายการรายวันจาก BotDashboard (แถวที่ 8 เป็นต้นไป) ---
+  const todayItems = [];
   for (let i = 7; i < rows.length; i++) {
     const row = rows[i];
     if (!row) continue;
     
-    // ตรวจสอบฝั่งรายรับ (คอลัมน์ B, C)
+    // รายรับ: B8:รายรับ, C8:จำนวนเงิน
     const incItem = row[1];
     const incAmount = parseFloat(String(row[2] || 0).replace(/,/g, ''));
     if (incItem && incItem !== 'รายรับ' && incItem !== 'วันที่' && !isNaN(incAmount) && incAmount > 0) {
       todayItems.push({ item: incItem, type: 'รายรับ', amount: incAmount });
     }
 
-    // ตรวจสอบฝั่งรายจ่าย (คอลัมน์ G, H)
+    // รายจ่าย: G8:รายจ่าย, H8:จำนวนเงิน
     if (row.length >= 8) {
       const expItem = row[6];
       const expAmount = parseFloat(String(row[7] || 0).replace(/,/g, ''));
@@ -156,6 +141,7 @@ async function getBalanceSummary() {
     monthlyExpense,
     balance,
     todayItems,
+    accountBalances,
     summarySheet: dashboardSheetName,
     formattedDate: formatThaiDate(bangkokNow)
   };
@@ -163,6 +149,5 @@ async function getBalanceSummary() {
 
 module.exports = {
   saveRecord,
-  saveInvestmentRecord,
   getBalanceSummary
 };
