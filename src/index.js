@@ -8,6 +8,7 @@ const { google } = require('googleapis');
 
 const dialogflowRoutes = require("./routes/dialogflow");
 const ocrRoutes = require("./routes/ocr");
+const fs = require("fs");
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -35,12 +36,40 @@ app.use("/api/", limiter);
 // Debug Routes
 // ============================================================
 
-// 1. หน้า UI สำหรับ Debug
-app.get("/debug-auth", (req, res) => {
-  res.sendFile(path.join(__dirname, "../public/debug.html"));
+// 1. หน้า UI สำหรับ Admin & Debug
+app.get("/admin", (req, res) => {
+  res.sendFile(path.join(__dirname, "../public/admin.html"));
 });
 
-// 2. API สำหรับส่งข้อมูล Debug (เรียกจากหน้า HTML)
+app.get("/debug-auth", (req, res) => {
+  res.sendFile(path.join(__dirname, "../public/admin.html"));
+});
+
+// 2. API สำหรับดึง Config ปัจจุบัน
+app.get("/api/admin/config", (req, res) => {
+  const config = {
+    GOOGLE_SERVICE_ACCOUNT_EMAIL: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || "",
+    GOOGLE_SPREADSHEET_ID: process.env.GOOGLE_SPREADSHEET_ID || "",
+    OCR_PROVIDER: process.env.OCR_PROVIDER || "tesseract",
+    OPENAI_API_KEY: process.env.OPENAI_API_KEY ? "********" : "",
+    GEMINI_API_KEY: process.env.GEMINI_API_KEY ? "********" : ""
+  };
+  res.json(config);
+});
+
+// 3. API สำหรับบันทึก Config (Runtime Update)
+app.post("/api/admin/config", (req, res) => {
+  const newConfig = req.body;
+  Object.keys(newConfig).forEach(key => {
+    if (newConfig[key] && !newConfig[key].includes('***')) {
+      process.env[key] = newConfig[key];
+    }
+  });
+  console.log("[ADMIN] Configuration updated in runtime");
+  res.json({ success: true, message: "Runtime config updated" });
+});
+
+// 4. API สำหรับส่งข้อมูล Debug (เรียกจากหน้า HTML)
 app.get("/api/debug-auth-data", async (req, res) => {
   let logs = [];
   const addLog = (title, message, status = 'success', detail = null) => 

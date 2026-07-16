@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DevMus Admin - System Configuration</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <style>
+        body { background-color: #f8f9fa; font-family: 'Sarabun', sans-serif; }
+        .card { border: none; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); margin-bottom: 20px; }
+        .status-badge { font-size: 0.8rem; padding: 5px 10px; border-radius: 20px; }
+        .nav-link.active { font-weight: bold; border-bottom: 3px solid #0d6efd; }
+        pre { background: #f1f1f1; padding: 10px; border-radius: 5px; font-size: 0.85rem; }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-dark bg-primary mb-4">
+        <div class="container">
+            <span class="navbar-brand mb-0 h1"><i class="bi bi-robot"></i> DevMus Admin Dashboard</span>
+            <div class="d-flex">
+                <span id="system-status" class="badge bg-light text-dark">Checking system...</span>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="row">
+            <!-- Sidebar / Info -->
+            <div class="col-md-4">
+                <div class="card p-4">
+                    <h5><i class="bi bi-info-circle"></i> สถานะการตั้งค่า</h5>
+                    <hr>
+                    <div id="config-status-list">
+                        <div class="d-flex justify-content-between mb-2">
+                            <span>Google Sheets</span>
+                            <span id="status-sheets" class="status-badge bg-secondary text-white">Pending</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-2">
+                            <span>OCR Provider</span>
+                            <span id="status-ocr" class="status-badge bg-secondary text-white">Pending</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-2">
+                            <span>AI Analyst</span>
+                            <span id="status-ai" class="status-badge bg-secondary text-white">Pending</span>
+                        </div>
+                    </div>
+                    <button class="btn btn-outline-primary btn-sm mt-3 w-100" onclick="checkSystemStatus()">
+                        <i class="bi bi-arrow-clockwise"></i> ตรวจสอบสถานะใหม่
+                    </button>
+                </div>
+
+                <div class="card p-4 bg-light border-primary">
+                    <h6><i class="bi bi-lightbulb text-primary"></i> คำแนะนำ</h6>
+                    <p class="small text-muted">ค่าที่ตั้งในหน้านี้จะถูกนำไปใช้ในระบบ Webhook ของคุณ กรุณาตรวจสอบให้แน่ใจว่าได้แชร์สิทธิ์ Google Sheets ให้กับ Service Account Email แล้ว</p>
+                </div>
+            </div>
+
+            <!-- Main Content -->
+            <div class="col-md-8">
+                <div class="card p-4">
+                    <ul class="nav nav-tabs mb-4" id="configTabs">
+                        <li class="nav-item">
+                            <a class="nav-link active" href="#" data-tab="basic">พื้นฐาน & Google</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="#" data-tab="ocr">OCR & AI</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="#" data-tab="debug">Logs & Debug</a>
+                        </li>
+                    </ul>
+
+                    <form id="configForm">
+                        <!-- Basic Config -->
+                        <div id="tab-basic" class="tab-content">
+                            <div class="mb-3">
+                                <label class="form-label">Google Service Account Email</label>
+                                <input type="email" class="form-control" name="GOOGLE_SERVICE_ACCOUNT_EMAIL" placeholder="xxx@project.iam.gserviceaccount.com">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Google Private Key</label>
+                                <textarea class="form-control" name="GOOGLE_PRIVATE_KEY" rows="4" placeholder="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"></textarea>
+                                <div class="form-text text-danger">ระวัง: อย่าแชร์คีย์นี้ให้ใคร</div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Main Spreadsheet ID</label>
+                                <input type="text" class="form-control" name="GOOGLE_SPREADSHEET_ID" placeholder="ID จาก URL ของ Google Sheets">
+                            </div>
+                        </div>
+
+                        <!-- OCR & AI Config -->
+                        <div id="tab-ocr" class="tab-content d-none">
+                            <div class="mb-3">
+                                <label class="form-label">Default OCR Provider</label>
+                                <select class="form-select" name="OCR_PROVIDER">
+                                    <option value="tesseract">Tesseract (ฟรี)</option>
+                                    <option value="google">Google Cloud Vision (แนะนำ)</option>
+                                    <option value="spaceocr">SpaceOCR (สลิปไทย)</option>
+                                    <option value="iapp">iApp OCR</option>
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">OpenAI API Key (สำหรับ AI Analyst)</label>
+                                <input type="password" class="form-control" name="OPENAI_API_KEY" placeholder="sk-...">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Gemini API Key (สำหรับ GAS AI)</label>
+                                <input type="password" class="form-control" name="GEMINI_API_KEY" placeholder="AIza...">
+                            </div>
+                        </div>
+
+                        <!-- Debug -->
+                        <div id="tab-debug" class="tab-content d-none">
+                            <h6>System Logs (Latest 10)</h6>
+                            <div id="debug-logs" class="bg-dark text-success p-3 rounded" style="height: 200px; overflow-y: auto; font-family: monospace; font-size: 0.8rem;">
+                                > Waiting for data...
+                            </div>
+                        </div>
+
+                        <hr>
+                        <div class="d-flex justify-content-between">
+                            <button type="button" class="btn btn-secondary" onclick="loadCurrentConfig()">โหลดค่าปัจจุบัน</button>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-save"></i> บันทึกการตั้งค่า
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Tab switching logic
+        document.querySelectorAll('#configTabs .nav-link').forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                document.querySelectorAll('#configTabs .nav-link').forEach(l => l.classList.remove('active'));
+                link.classList.add('active');
+                
+                const target = link.getAttribute('data-tab');
+                document.querySelectorAll('.tab-content').forEach(content => {
+                    content.classList.add('d-none');
+                });
+                document.getElementById('tab-' + target).classList.remove('d-none');
+            });
+        });
+
+        // Load config
+        async function loadCurrentConfig() {
+            try {
+                const res = await fetch('/api/admin/config');
+                const data = await res.json();
+                
+                const form = document.getElementById('configForm');
+                for (const key in data) {
+                    const input = form.elements[key];
+                    if (input) input.value = data[key];
+                }
+                showToast('โหลดข้อมูลสำเร็จ', 'success');
+            } catch (err) {
+                showToast('โหลดข้อมูลล้มเหลว: ' + err.message, 'danger');
+            }
+        }
+
+        // Save config
+        document.getElementById('configForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const data = Object.fromEntries(formData.entries());
+            
+            try {
+                const res = await fetch('/api/admin/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                
+                if (res.ok) {
+                    showToast('บันทึกการตั้งค่าเรียบร้อยแล้ว (ระบบจะนำไปใช้ใน Request ถัดไป)', 'success');
+                    checkSystemStatus();
+                } else {
+                    throw new Error('บันทึกไม่สำเร็จ');
+                }
+            } catch (err) {
+                showToast(err.message, 'danger');
+            }
+        });
+
+        // Check status
+        async function checkSystemStatus() {
+            document.getElementById('system-status').innerText = 'Checking...';
+            try {
+                const res = await fetch('/api/debug-auth-data');
+                const data = await res.json();
+                
+                // Update badges based on logs
+                const updateBadge = (id, status) => {
+                    const el = document.getElementById(id);
+                    el.className = 'status-badge ' + (status === 'success' ? 'bg-success' : 'bg-danger') + ' text-white';
+                    el.innerText = status === 'success' ? 'Ready' : 'Error';
+                };
+
+                const sheetLog = data.logs.find(l => l.title === 'Spreadsheet Access');
+                updateBadge('status-sheets', sheetLog?.status || 'error');
+                
+                const authLog = data.logs.find(l => l.title === 'Authentication Status');
+                document.getElementById('system-status').className = 'badge ' + (authLog?.status === 'success' ? 'bg-success' : 'bg-danger');
+                document.getElementById('system-status').innerText = authLog?.status === 'success' ? 'Online' : 'Auth Error';
+
+                // Simple OCR/AI check (based on presence of keys)
+                const form = document.getElementById('configForm');
+                updateBadge('status-ocr', form.elements['OCR_PROVIDER'].value ? 'success' : 'error');
+                updateBadge('status-ai', form.elements['OPENAI_API_KEY'].value ? 'success' : 'error');
+
+                // Update debug logs
+                const logBox = document.getElementById('debug-logs');
+                logBox.innerHTML = data.logs.map(l => `<div>[${l.status.toUpperCase()}] ${l.title}: ${l.message}</div>`).join('');
+
+            } catch (err) {
+                document.getElementById('system-status').innerText = 'Connection Error';
+            }
+        }
+
+        function showToast(msg, type) {
+            // Simple alert for now, can be improved to bootstrap toast
+            alert(msg);
+        }
+
+        // Initial load
+        window.onload = () => {
+            loadCurrentConfig();
+            checkSystemStatus();
+        };
+    </script>
+</body>
+</html>
