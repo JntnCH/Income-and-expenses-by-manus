@@ -1,7 +1,7 @@
 /**
  * OCR Manager
  * จัดการการเลือกค่าย OCR และประมวลผลภาพสลิป/ใบเสร็จ
- * รองรับ: tesseract | aws | iapp | appman | spaceocr
+ * รองรับ: tesseract | aws | iapp | appman | spaceocr | google
  */
 
 const tesseractProvider = require('./providers/tesseractProvider');
@@ -9,13 +9,16 @@ const awsProvider = require('./providers/awsProvider');
 const iappProvider = require('./providers/iappProvider');
 const appmanProvider = require('./providers/appmanProvider');
 const spaceocrProvider = require('./providers/spaceocrProvider');
+const cloudVisionProvider = require('./providers/cloud-vision'); // ➕ 1. เพิ่มการ Import Google Vision
 
 const PROVIDERS = {
   tesseract: tesseractProvider,
   aws: awsProvider,
   iapp: iappProvider,
   appman: appmanProvider,
-  spaceocr: spaceocrProvider
+  spaceocr: spaceocrProvider,
+  google: cloudVisionProvider,         // ➕ 2. ผูกคีย์ 'google' เข้ากับระบบ
+  'cloud-vision': cloudVisionProvider   // รองรับกรณีพิมพ์แบบมีขีดใน YAML
 };
 
 /**
@@ -34,7 +37,7 @@ async function processImage(imageInput, providerName = null) {
   console.log(`[OCR] Using provider: ${provider}`);
 
   try {
-    const rawResult = await PROVIDERS[provider].recognize(imageInput);
+    const rawResult = await PROVIDERS[provider].recognize(imageInput); // 💡 จะวิ่งไปเรียกฟังก์ชัน recognize() ของค่ายนั้นๆ
     const parsed = parseOCRResult(rawResult, provider);
     console.log(`[OCR] Parsed result:`, JSON.stringify(parsed));
     return parsed;
@@ -85,13 +88,14 @@ function parseOCRResult(rawResult, provider) {
     };
   }
 
-  // Tesseract และ AWS ส่งข้อมูล raw text
+  // 📝 Tesseract, AWS และ Google Cloud Vision ส่งข้อมูลแบบข้อความดิบ (Raw Text)
+  // ระบบจะไหลลงมาทำฟังก์ชัน extractFromText ด้านล่างนี้โดยอัตโนมัติครับ
   const text = typeof rawResult === 'string' ? rawResult : rawResult.text || rawResult.raw || '';
   return extractFromText(text, rawResult);
 }
 
 /**
- * ดึงข้อมูลสำคัญจาก raw OCR text (Tesseract / AWS)
+ * ดึงข้อมูลสำคัญจาก raw OCR text (Tesseract / AWS / Google)
  */
 function extractFromText(text, rawResult) {
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
@@ -102,7 +106,7 @@ function extractFromText(text, rawResult) {
     /(?:ยอด|รวม|total|amount|จำนวน)[^\d]*(\d[\d,]*\.?\d*)/i,
     /(\d[\d,]*\.\d{2})\s*(?:บาท|THB|฿)/i,
     /(?:฿|THB)\s*(\d[\d,]*\.?\d*)/i,
-    /(\d[\d,]*\.?\d*)\s*บาท/i
+    /(\d[\d,]*\.\d{2})/i // ➕ เพิ่มแพทเทิร์นทั่วไปสำหรับดักทศนิยม 2 ตำแหน่งที่กูเกิลอ่านได้
   ];
 
   for (const pattern of amountPatterns) {
@@ -142,17 +146,20 @@ function extractFromText(text, rawResult) {
  * รายชื่อ OCR providers ที่รองรับ
  */
 function getAvailableProviders() {
-  return Object.keys(PROVIDERS).map(key => ({
-    id: key,
-    name: {
-      tesseract: 'Tesseract (ฟรี, ทำงานบน Server)',
-      aws: 'AWS Textract (แม่นยำสูง)',
-      iapp: 'iApp Technology (ไทย, รองรับใบเสร็จไทย)',
-      appman: 'APPMAN OCR (ไทย, ความแม่นยำ 98%)',
-      spaceocr: 'SpaceOCR (ไทย, เชี่ยวชาญสลิปธนาคาร)'
-    }[key] || key,
-    active: (process.env.OCR_PROVIDER || 'tesseract') === key
-  }));
+  return Object.keys(PROVIDERS)
+    .filter(key => key !== 'cloud-vision') // ซ่อนตัวซ้ำตอนแสดงผลรายชื่อ
+    .map(key => ({
+      id: key,
+      name: {
+        tesseract: 'Tesseract (ฟรี, ทำงานบน Server)',
+        aws: 'AWS Textract (แม่นยำสูง)',
+        iapp: 'iApp Technology (ไทย, รองรับใบเสร็จไทย)',
+        appman: 'APPMAN OCR (ไทย, ความแม่นยำ 98%)',
+        spaceocr: 'SpaceOCR (ไทย, เชี่ยวชาญสลิปธนาคาร)',
+        google: 'Google Cloud Vision API (แม่นยำสูงมาก, อ่านสลิปและภาษาไทยดีเยี่ยม)' // ➕ 3. เพิ่มคำอธิบายค่ายกูเกิล
+      }[key] || key,
+      active: (process.env.OCR_PROVIDER || 'tesseract') === key
+    }));
 }
 
 module.exports = { processImage, getAvailableProviders };

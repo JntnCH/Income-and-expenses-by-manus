@@ -6,86 +6,116 @@ from google.oauth2 import service_account
 
 app = Flask(__name__)
 
-# 1. ตั้งค่า Gemini
+# 1. ตั้งค่า Gemini API
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 genai.configure(api_key=GEMINI_API_KEY)
 gemini_model = genai.GenerativeModel('gemini-1.5-flash')
 
-# 2. ตั้งค่า Google Sheets API (ดึงสิทธิ์จาก Service Account)
-SCOPES = ['https://www.googleapis.com/auth/spreadsheets.readonly']
-SPREADSHEET_ID = os.environ.get("SPREADSHEET_ID") # ID ของชีตรายรับ-รายจ่ายของคุณ
+# 2. ตั้งค่า Scopes สำหรับ Service Account (ต้องมีทั้ง Drive และ Sheets)
+SCOPES = [
+    'https://www.googleapis.com/auth/spreadsheets.readonly',
+    'https://www.googleapis.com/auth/drive.readonly'
+]
 
-def get_sheets_data():
-    """ฟังก์ชันดึงข้อมูลรายรับรายจ่ายล่าสุดจาก Google Sheets"""
-    # หมายเหตุ: แนะนำให้ใช้ตัวแปรสภาพแวดล้อมหรือ Google Secret Manager สำหรับเก็บ Credential
+# ใส่รหัสโฟลเดอร์หลักของคุณที่นี่
+FOLDER_ID = '1dtBTIQeGJNQc51WcAYZrkIo_T9sAQUbf' 
+
+def get_data_from_all_sheets():
+    """ดึงข้อมูลจากทุกไฟล์ Google Sheets ในโฟลเดอร์ที่ระบุแบบอัตโนมัติ"""
     creds = service_account.Credentials.from_service_account_file(
         'credentials.json', scopes=SCOPES
     )
-    service = build('sheets', 'v4', credentials=creds)
-    sheet = service.spreadsheets()
     
-    # ดึงข้อมูลจากชีต (ปรับเปลี่ยน Range ตามโครงสร้างตารางของคุณ เช่น 'Sheet1!A1:D100')
-    result = sheet.values().get(spreadsheetId=SPREADSHEET_ID, range='บันทึก!A1:E200').execute()
-    rows = result.get('values', [])
+    # ดึงรายชื่อไฟล์ Google Sheets ในโฟลเดอร์ด้วย Drive API v3
+    drive_service = build('drive', 'v3', credentials=creds)
+    query = f"'{FOLDER_ID}' in parents and mimeType = 'application/vnd.google-apps.spreadsheet' and trashed = false"
     
-    # แปลงข้อมูลเป็นข้อความเพื่อส่งให้ Gemini เข้าใจได้ง่ายขึ้น
-    if not rows:
-        return "ไม่มีข้อมูลในตาราง"
+    results = drive_service.files().list(q=query, fields="files(id, name)").execute()
+    files = results.get('files', [])
     
-    headers = rows[0]
-    data_lines = []
-    for row in rows[1:]:
-        # เชื่อมแถวข้อมูลด้วย comma
-        data_lines.append(", ".join([f"{headers[i]}: {row[i]}" for i in range(len(row)) if i < len(headers)]))
+    sheets_service = build('sheets', 'v4', credentials=creds)
+    combined_text_data = []
     
-    return "\n".join(data_lines)
+    for f in files:
+        file_id = f['id']
+        file_name = f['name']
+        
+        try:
+            # ดึงรายชื่อชีตย่อย (Tabs) ทั้งหมดในไฟล์นั้นๆ
+            spreadsheet = sheets_service.spreadsheets().get(spreadsheetId=file_id).execute()
+            sheet_names = [sheet['properties']['title'] for sheet in spreadsheet.get('sheets', [])]
+            
+            file_summary = [f"=== ข้อมูลจากไฟล์: {file_name} ==="]
+            
+            for sheet_name in sheet_names:
+                # ดึงข้อมูลแถวบนๆ เช่น A1:F100 (ปรับเปลี่ยน Range และขอบเขตตามโครงสร้างชีตของคุณ)
+                result = sheets_service.spreadsheets().values().get(
+                    spreadsheetId=file_id, 
+                    range=f"'{sheet_name}'!A1:F100"
+                ).execute()
+                
+                rows = result.get('values', [])
+                if rows:
+                    headers = rows[0]
+                    sheet_lines = [f"  [ชีตย่อย: {sheet_name}]"]
+                    for row in rows[1:]:
+                        # นำหัวข้อคอลัมน์และข้อมูลแถวมารวมกันเป็นประโยคที่ Gemini เข้าใจได้ง่ายขึ้น
+                        line_data = ", ".join([f"{headers[i]}: {row[i]}" for i in range(len(row)) if i < len(headers)])
+                        sheet_lines.append(f"    - {line_data}")
+                    file_summary.append("\n".join(sheet_lines))
+                else:
+                    file_summary.append(f"  [ชีตย่อย: {sheet_name}] (ไม่มีข้อมูล)")
+                    
+            combined_text_data.append("\n".join(file_summary))
+            
+        except Exception as e:
+            print(f"เกิดข้อผิดพลาดในการดึงข้อมูลไฟล์ {file_name} ({file_id}): {e}")
+            continue
+            
+    return "\n\n".join(combined_text_data)
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
     req = request.get_json(silent=True, force=True)
-    
-    # ดึงคำถามภาษาธรรมชาติที่ผู้ใช้พิมพ์ส่งเข้ามาใน Telegram
     user_query = req.get('queryResult', {}).get('queryText', '')
     
-    # 1. ดึงข้อมูลรายรับ-รายจ่ายทั้งหมดจาก Google Sheets
+    # 1. ดึงข้อมูลจากไฟล์ทั้งหมดในโฟลเดอร์ขึ้นมาเตรียมไว้
     try:
-        sheets_data = get_sheets_data()
+        sheets_data_context = get_data_from_all_sheets()
     except Exception as e:
-        print(f"Error fetching Sheets data: {e}")
-        sheets_data = "ไม่สามารถดึงข้อมูลจาก Google Sheets ได้ในขณะนี้"
+        print(f"Error fetching sheets: {e}")
+        sheets_data_context = "ไม่สามารถอ่านข้อมูลตารางรายรับรายจ่ายได้ในขณะนี้"
 
-    # 2. ออกแบบ Prompt เพื่อควบคุมบทบาทของ Gemini
+    # 2. ตั้งกฎและใส่บริบทข้อมูลทั้งหมดให้ Gemini ช่วยตอบอย่างชาญฉลาด
     system_instruction = (
-        "คุณคือผู้ช่วยจัดการการเงินส่วนบุคคลที่ฉลาดและเป็นมิตร "
-        "ด้านล่างนี้คือข้อมูลรายรับ-รายจ่ายดิบจาก Google Sheets ของผู้ใช้งาน "
-        "กรุณาวิเคราะห์ข้อมูลนี้เพื่อตอบคำถามของผู้ใช้อย่างกระชับ ถูกต้อง และเข้าใจง่าย "
-        "หากผู้ใช้ถามเกี่ยวกับสถิติ เช่น 'ยอดรวม', 'ค่ากาแฟ', หรือ 'เดือนนี้จ่ายไปเท่าไหร่' "
-        "ให้คุณคำนวณและตอบสรุปให้เขาด้วย"
+        "คุณคือระบบ AI ผู้ช่วยจัดการด้านการเงินส่วนบุคคล "
+        "ข้อมูลด้านล่างนี้เป็นข้อมูลรายรับ-รายจ่ายดิบจาก Google Sheets หลายไฟล์ที่อยู่ในระบบคลาวด์ของคุณ "
+        "หน้าที่ของคุณคือการวิเคราะห์และตอบคำถามของผู้ใช้ โดยพิจารณาจากข้อมูลเหล่านี้ "
+        "เมื่อได้ข้อสรุปแล้ว กรุณาระบุด้วยว่าข้อมูลมาจาก 'ไฟล์' หรือ 'ชีตย่อย' ไหน เพื่อความโปร่งใสและถูกต้อง"
     )
     
     full_prompt = f"""
     {system_instruction}
     
-    --- ข้อมูลจาก Google Sheets ---
-    {sheets_data}
-    -------------------------------
+    --- ข้อมูลประกอบการตัดสินใจ ---
+    {sheets_data_context}
+    ------------------------------
     
     คำถามของผู้ใช้: "{user_query}"
     """
 
-    # 3. ส่งข้อมูลให้ Gemini ช่วยคิดหาคำตอบ
+    # 3. ให้ Gemini ช่วยประมวลผลคำตอบ
     try:
         response = gemini_model.generate_content(full_prompt)
         ai_response = response.text
     except Exception as e:
-        print(f"Error generating content with Gemini: {e}")
-        ai_response = "ขออภัยครับ ระบบวิเคราะห์ข้อมูลขัดข้องชั่วคราว"
+        print(f"Gemini generation error: {e}")
+        ai_response = "ระบบประมวลผลข้อมูลการเงินขัดข้องชั่วคราวครับ"
 
-    # 4. ส่งคำตอบกลับไปที่ Dialogflow เพื่อตอบผู้ใช้ใน Telegram
+    # 4. ส่งกลับผลลัพธ์ผ่าน Dialogflow ไปแสดงใน Telegram
     reply = {
         "fulfillmentText": ai_response
     }
-    
     return jsonify(reply)
 
 if __name__ == '__main__':
