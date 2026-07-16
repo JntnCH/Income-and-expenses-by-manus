@@ -9,9 +9,9 @@ on:
 env:
   PROJECT_ID: income-expenses-by-manus          # ID ของโปรเจกต์ GCP (เช่น income-expense-12345)
   REGION: asia-southeast1-docker.pkg.dev        # โซนเซิร์ฟเวอร์ (แนะนำ สิงคโปร์: asia-southeast1)
-  SERVICE_NAME: income-expense-frombot              # ชื่อบริการของ Cloud Run ที่จะสร้าง/อัปเดต
+  SERVICE_NAME: income-expense-frombot          # ชื่อบริการของ Cloud Run ที่จะสร้าง/อัปเดต
   GAR_LOCATION: asia-southeast1                 # ที่ตั้งของ Artifact Registry (มักจะเหมือน REGION)
-  REPOSITORY: income-bot-repo                    # ชื่อคลังเก็บ Docker Image ใน Artifact Registry
+  REPOSITORY: cloud-run-source-deploy           # ชื่อคลังเก็บ Docker Image ใน Artifact Registry
 
 jobs:
   deploy:
