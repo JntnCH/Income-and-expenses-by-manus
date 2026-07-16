@@ -83,7 +83,7 @@ function buildBalanceSummary(summary) {
   // สร้างส่วนแสดงยอดแยกบัญชี
   let accountText = '';
   if (summary.accountBalances && summary.accountBalances.length > 0) {
-    accountText = '\n\n🏦 ยอดแยกตามบัญชี\n' + 
+    accountText = '🏦 ยอดแยกตามบัญชี' + 
       summary.accountBalances
         .map(acc => ` - ${acc.name} : ${formatAmount(acc.amount)} บาท`)
         .join('\n');
