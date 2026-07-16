@@ -97,7 +97,7 @@ function buildBalanceSummary(summary) {
     `💸 รายรับวันนี้  ${formatAmount(summary.dailyIncome)} บาท\n` +
     `🛍️ รายจ่ายวันนี้ ${formatAmount(summary.dailyExpense)} บาท\n` +
     `💰 รายรับเดือนนี้  ${formatAmount(summary.monthlyIncome)} บาท\n` +
-    `🛒 รายจ่ายเดือนนี้  ${formatAmount(summary.monthlyExpense)} บาท\n\n` +
+    `🛒 รายจ่ายเดือนนี้  ${formatAmount(summary.monthlyExpense)} บาท\n` +
     `${accountText}\n\n`+
     `🪙 รวมทุกบัญชี ${formatAmount(summary.balance)} บาท`
   );
