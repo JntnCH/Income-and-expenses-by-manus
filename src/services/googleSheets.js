@@ -71,7 +71,7 @@ async function saveRecord(data) {
     data.item || 'ไม่ระบุ',
     parseFloat(data.amount) || 0,
     data.category || 'ทั่วไป',
-    data.account || 'เงินสด',
+    data.account || ,
     data.platform || 'Unknown',
     data.recorder || 'ไม่ระบุ',
   ];
