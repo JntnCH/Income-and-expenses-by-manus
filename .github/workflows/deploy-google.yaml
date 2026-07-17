@@ -57,7 +57,7 @@ jobs:
           DEBT_SPREADSHEET_ID="1FENTWNHjQIGBQ-GWjPhV7qf8Yh7Qdk2MqPMzRVeyZX0"
           GOOGLE_SHEET_NAME=รายรับ-รายจ่าย
           GOOGLE_INVEST_SHEET_NAME=การลงทุน
-          GOOGLE_SUMMARY_SHEET_NAME=รวมทุกชีต
+          GOOGLE_BOTDASHBOARD_SHEET_NAME=BotDashboard
           OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
           DIALOGFLOW_PROJECT_ID=income-expenses-by-manus
           OCR_PROVIDER=google
