@@ -8,10 +8,10 @@ on:
 # 📌 1. กลุ่มค่ากำหนดพื้นฐาน (ปรับ REGION ให้ถูกต้อง)
 env:
   PROJECT_ID: income-expenses-by-manus          
-  REGION: asia-southeast1                       # แก้ตรงนี้เป็นแค่ชื่อ Region ของ Cloud Run
-  SERVICE_NAME: income-expense-frombot          
-  GAR_LOCATION: asia-southeast1                 
-  REPOSITORY: cloud-run-source-deploy           
+  REGION: asia-southeast3                       # แก้ตรงนี้เป็นแค่ชื่อ Region ของ Cloud Run
+  SERVICE_NAME: income-expense-docker          
+  GAR_LOCATION: asia-southeast3                 
+  REPOSITORY: income-expense-docker           
 
 jobs:
   deploy:
@@ -22,12 +22,12 @@ jobs:
 
     # 📌 2. กลุ่มการยืนยันตัวตน (Authentication)
     - name: Authenticate to Google Cloud
-      uses: google-github-actions/auth@v2
+      uses: google-github-actions/auth@v3
       with:
         credentials_json: ${{ secrets.GCP_SA_KEY }} 
 
     - name: Set up Cloud SDK
-      uses: google-github-actions/setup-gcloud@v2
+      uses: google-github-actions/setup-gcloud@v3
 
     - name: Configure Docker for GCP
       run: |
@@ -41,7 +41,7 @@ jobs:
 
     # 📌 4. ขั้นตอนส่งขึ้น Cloud Run + แนบค่า Environment Variables
     - name: Deploy to Cloud Run
-      uses: google-github-actions/deploy-cloudrun@v2
+      uses: google-github-actions/deploy-cloudrun@v3
       with:
         service: ${{ env.SERVICE_NAME }}
         region: ${{ env.REGION }}
