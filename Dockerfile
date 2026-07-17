@@ -27,6 +27,8 @@ RUN pip3 install --no-cache-dir -r requirements.txt --break-system-packages
 # Copy source code
 COPY . .
 
+ENV NODE_OPTIONS="--openssl-legacy-provider"
+
 # Cloud Run จะส่งพอร์ตมาทาง environment variable $PORT (ปกติคือ 8080)
 ENV PORT=8080
 EXPOSE 8080
