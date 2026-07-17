@@ -8,9 +8,9 @@ on:
 env:
   PROJECT_ID: income-expenses-by-manus
   REGION: asia-southeast3
-  SERVICE_NAME: income-expense-docker
+  SERVICE_NAME: income-expense-frombot
   GAR_LOCATION: asia-southeast3
-  REPOSITORY: income-expense-docker
+  REPOSITORY: income-expense-frombot
 
 jobs:
   deploy:
