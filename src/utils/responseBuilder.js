@@ -21,7 +21,7 @@ function buildTransactionConfirmation(type, item, amount, category, account) {
   return `📝 ฉันบันทึก ${item}\n` +
          `📂 ประเภท : ${type}\n` +
          `📦 หมวดหมู่ : ${category}\n` +
-         `💳 บัญชี : ${account} \n` +
+         `💳 บัญชี : ${account || 'เงินสด'} \n` +
          `💵 จำนวน ${formatAmount(amount)} บาท\n` +
          `✅ ให้คุณเรียบร้อยแล้ว`;
 }
@@ -32,6 +32,17 @@ function buildIncomeConfirmation(item, amount, category, account) {
 
 function buildExpenseConfirmation(item, amount, category, account) {
   return buildTransactionConfirmation('รายจ่าย', item, amount, category, account);
+}
+
+/**
+ * ยืนยันการบันทึกจาก OCR (สลิป/ใบเสร็จ)
+ */
+function buildOCRConfirmation(ocrResult, type = 'รายจ่าย') {
+  return `📸 อ่านข้อมูลจากสลิปสำเร็จ!\n` +
+         `📝 รายการ: ${ocrResult.item || 'สแกนจากสลิป'}\n` +
+         `📂 ประเภท: ${type}\n` +
+         `💵 จำนวน: ${formatAmount(ocrResult.amount)} บาท\n` +
+         `✅ บันทึกลง Google Sheets ให้แล้วครับ`;
 }
 
 /**
@@ -67,7 +78,7 @@ function buildSellInvestmentConfirmation(assetName, assetType, quantity, pricePe
 }
 
 /**
- * สรุปยอดคงเหลือ ตามรูปแบบที่ผู้ใช้ต้องการ (จากรูปภาพ)
+ * สรุปยอดคงเหลือ ตามรูปแบบที่ผู้ใช้ต้องการ
  * เพิ่ม: การแสดงผลยอดแยกตามบัญชี (Account Balances)
  */
 function buildBalanceSummary(summary) {
@@ -117,8 +128,9 @@ module.exports = {
   buildDialogflowResponse,
   buildIncomeConfirmation,
   buildExpenseConfirmation,
+  buildOCRConfirmation,
   buildBuyInvestmentConfirmation,
   buildSellInvestmentConfirmation,
   buildBalanceSummary,
-  formatAmount,
+  formatAmount
 };
