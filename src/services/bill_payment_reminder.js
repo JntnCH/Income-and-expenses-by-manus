@@ -3,11 +3,12 @@ const axios = require('axios');
 
 // กำหนด Spreadsheet ID ของทั้งสองไฟล์
 // ในไฟล์ .js ของคุณ
-const SPREADSHEET_ID_1 = "REPLACE_ME"; 
+// โค้ดจะวิ่งไปอ่านจาก YAML/Cloud Run ก่อน ถ้าไม่มีจะมาดึงค่าสำรองจากไฟล์ .env ในเครื่อง
+const SPREADSHEET_ID = process.env.MONTHLY_SPREADSHEET_ID || process.env.LOCAL_MONTHLY_SHEET_ID;
 
 // แล้วใน GitHub Actions YAML คุณใช้คำสั่ง replace หรือส่งเป็น env
 // env:
-//   SPREADSHEET_ID_1: ${{ secrets.MONTHLY_SPREADSHEET_ID }}
+//   SPREADSHEET_ID: ${{ secrets.MONTHLY_SPREADSHEET_ID }}
 
 // ฟังก์ชันดึงเดือนย่อภาษาไทยอัตโนมัติให้ตรงกับในชีต (เช่น "ก.ค.")
 function getThaiShortMonth() {
@@ -29,7 +30,7 @@ app.get('/cron/check-bills', async (req, res) => {
 
     // ดึงข้อมูลจากไฟล์ที่ 1 แถบ "กำหนดจ่าย" ตั้งแต่แถวที่ 4 ลงไป
     const response = await sheets.spreadsheets.values.get({
-      spreadsheetId: SPREADSHEET_ID_1,
+      spreadsheetId = process.env.MONTHLY_SPREADSHEET_ID || process.env.LOCAL_MONTHLY_SHEET_ID,
       range: 'กำหนดจ่าย!B4:G',
     });
 

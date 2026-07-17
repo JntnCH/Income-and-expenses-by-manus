@@ -54,6 +54,8 @@ jobs:
           GOOGLE_SHEET_NAME=รายรับ-รายจ่าย
           GOOGLE_INVEST_SHEET_NAME=การลงทุน
           GOOGLE_BOTDASHBOARD_SHEET_NAME=BotDashboard
+          TELEGRAM_TOKEN=${{ secrets.TELEGRAM_TOKEN }}
+          MY_TELEGRAM_CHAT_ID=${{ secrets.MY_TELEGRAM_CHAT_ID  }}
           OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
           DIALOGFLOW_PROJECT_ID=income-expenses-by-manus
           OCR_PROVIDER=google

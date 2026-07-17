@@ -38,7 +38,7 @@ router.post('/dialogflow', async (req, res) => {
     const expenseCategory = extractEntity(parameters, ['Expense-category', 'expense-category']);
     
     // ดึงค่า Account (เช่น กสิกร, เงินสด, SCB)
-    const account = extractEntity(parameters, ['account', 'Account', 'bank']) || 'เงินสด';
+    const account = extractEntity(parameters, ['account', 'Account', 'bank']);
 
     // ดึงชื่อรายการ (item)
     const item = parameters.item || 
