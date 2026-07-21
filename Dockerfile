@@ -33,7 +33,10 @@ ENV NODE_OPTIONS="--openssl-legacy-provider"
 ENV PORT=8080
 EXPOSE 8080
 
-# Health check
+# ============================================================
+# Docker HEALTHCHECK - Basic health check
+# ============================================================
+# Checks if the server is running and responding
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
   CMD curl -f http://localhost:8080/health || exit 1
 
