@@ -1,4 +1,4 @@
-name: Deploy to Google Cloud Run
+name: Deploy to Google Cloud Run (Production)
 
 on:
   push:
@@ -55,9 +55,24 @@ jobs:
           GOOGLE_INVEST_SHEET_NAME=การลงทุน
           GOOGLE_BOTDASHBOARD_SHEET_NAME=BotDashboard
           TELEGRAM_TOKEN=${{ secrets.TELEGRAM_TOKEN }}
-          MY_TELEGRAM_CHAT_ID=${{ secrets.MY_TELEGRAM_CHAT_ID  }}
+          MY_TELEGRAM_CHAT_ID=${{ secrets.MY_TELEGRAM_CHAT_ID }}
           OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
           DIALOGFLOW_PROJECT_ID=income-expenses-by-manus
           OCR_PROVIDER=google
           IAPP_API_KEY=${{ secrets.IAPP_API_KEY }}
           APPMAN_API_KEY=${{ secrets.APPMAN_API_KEY }}
+
+    - name: 📊 Deployment Complete - Health Checks Available
+      run: |
+        echo "✅ Cloud Run service deployed successfully!"
+        echo ""
+        echo "📍 Service Details:"
+        echo "  • Service: ${{ env.SERVICE_NAME }}"
+        echo "  • Region: ${{ env.REGION }}"
+        echo "  • Image SHA: ${{ github.sha }}"
+        echo ""
+        echo "📊 Available Health Check Endpoints:"
+        echo "  • GET /health - Basic health check (Docker HEALTHCHECK)"
+        echo "  • GET /health/ready - Readiness probe (all dependencies check)"
+        echo "  • GET /health/startup - Startup check (full diagnostic)"
+        echo "  • GET /health/live - Liveness probe (minimal check)"
