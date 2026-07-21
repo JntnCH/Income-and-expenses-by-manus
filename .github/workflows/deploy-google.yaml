@@ -9,8 +9,9 @@ env:
   PROJECT_ID: income-expenses-by-manus
   REGION: asia-southeast1
   SERVICE_NAME: income-expense-frombot
-  GAR_LOCATION: asia-southeast1
+  GAR_LOCATION: asia-southeast3
   REPOSITORY: income-expense-frombot
+  IMAGE_NAME: income-expense-frombot
 
 jobs:
   deploy:
@@ -27,21 +28,21 @@ jobs:
     - name: Set up Cloud SDK
       uses: google-github-actions/setup-gcloud@v3
 
-    - name: Configure Docker for GCP
+    - name: Configure Docker for GCP Artifact Registry
       run: |
         gcloud auth configure-docker ${{ env.GAR_LOCATION }}-docker.pkg.dev
 
     - name: Build and Push Docker Image
       run: |
-        docker build -t ${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.SERVICE_NAME }}:${{ github.sha }} .
-        docker push ${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.SERVICE_NAME }}:${{ github.sha }}
+        docker build -t ${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} .
+        docker push ${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
 
     - name: Deploy to Cloud Run
       uses: google-github-actions/deploy-cloudrun@v3
       with:
         service: ${{ env.SERVICE_NAME }}
         region: ${{ env.REGION }}
-        image: ${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.SERVICE_NAME }}:${{ github.sha }}
+        image: ${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
         # ✅ เปิดให้ Dialogflow เรียก Webhook ได้
         flags: --allow-unauthenticated --port=8080 --min-instances=0
         env_vars: |
@@ -69,7 +70,8 @@ jobs:
         echo "📍 Service Details:"
         echo "  • Service: ${{ env.SERVICE_NAME }}"
         echo "  • Region: ${{ env.REGION }}"
-        echo "  • Image SHA: ${{ github.sha }}"
+        echo "  • Artifact Registry: ${{ env.GAR_LOCATION }}-docker.pkg.dev"
+        echo "  • Image: ${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
         echo ""
         echo "📊 Available Health Check Endpoints:"
         echo "  • GET /health - Basic health check (Docker HEALTHCHECK)"
