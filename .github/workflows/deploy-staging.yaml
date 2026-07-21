@@ -1,0 +1,70 @@
+name: Deploy to Google Cloud Run (Staging)
+
+on:
+  push:
+    branches:
+      - staging
+
+env:
+  PROJECT_ID: income-expenses-by-manus
+  REGION: asia-southeast1
+  SERVICE_NAME: income-expense-frombot-staging
+  GAR_LOCATION: asia-southeast1
+  REPOSITORY: income-expense-frombot
+
+jobs:
+  deploy-staging:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Authenticate to Google Cloud
+      uses: google-github-actions/auth@v3
+      with:
+        credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+    - name: Set up Cloud SDK
+      uses: google-github-actions/setup-gcloud@v3
+
+    - name: Configure Docker for GCP
+      run: |
+        gcloud auth configure-docker ${{ env.GAR_LOCATION }}-docker.pkg.dev
+
+    - name: Build and Push Docker Image (Staging)
+      run: |
+        docker build -t ${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.SERVICE_NAME }}:${{ github.sha }} .
+        docker push ${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.SERVICE_NAME }}:${{ github.sha }}
+
+    - name: Deploy to Cloud Run (Staging)
+      uses: google-github-actions/deploy-cloudrun@v3
+      with:
+        service: ${{ env.SERVICE_NAME }}
+        region: ${{ env.REGION }}
+        image: ${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.SERVICE_NAME }}:${{ github.sha }}
+        flags: --allow-unauthenticated --port=8080 --min-instances=0
+        env_vars: |
+          NODE_ENV=staging
+          GOOGLE_SERVICE_ACCOUNT_EMAIL=${{ secrets.GOOGLE_SERVICE_ACCOUNT_EMAIL }}
+          GOOGLE_PRIVATE_KEY=${{ secrets.GOOGLE_PRIVATE_KEY }}
+          GOOGLE_SPREADSHEET_ID=1yPNCTj0RF9GHcOIuwLyqKECSIwF8oQ4cr2BVBidzFdU
+          MONTHLY_SPREADSHEET_ID=16gOMnohl7v9RPTTqhHtJlMV6U65OJSiKDu02DIPdEwg
+          DEBT_SPREADSHEET_ID=1FENTWNHjQIGBQ-GWjPhV7qf8Yh7Qdk2MqPMzRVeyZX0
+          GOOGLE_SHEET_NAME=รายรับ-รายจ่าย
+          GOOGLE_INVEST_SHEET_NAME=การลงทุน
+          GOOGLE_BOTDASHBOARD_SHEET_NAME=BotDashboard
+          TELEGRAM_TOKEN=${{ secrets.TELEGRAM_TOKEN }}
+          MY_TELEGRAM_CHAT_ID=${{ secrets.MY_TELEGRAM_CHAT_ID }}
+          OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+          DIALOGFLOW_PROJECT_ID=income-expenses-by-manus
+          OCR_PROVIDER=google
+          IAPP_API_KEY=${{ secrets.IAPP_API_KEY }}
+          APPMAN_API_KEY=${{ secrets.APPMAN_API_KEY }}
+
+    - name: 📢 Notify Deployment (Staging)
+      if: always()
+      run: |
+        echo "✅ Staging deployment completed!"
+        echo "🔗 Service: ${{ env.SERVICE_NAME }}"
+        echo "📍 Region: ${{ env.REGION }}"
+        echo "🏷️ Image SHA: ${{ github.sha }}"
