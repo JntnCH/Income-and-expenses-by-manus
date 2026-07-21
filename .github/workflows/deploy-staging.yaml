@@ -7,9 +7,9 @@ on:
 
 env:
   PROJECT_ID: income-expenses-by-manus
-  REGION: asia-southeast1
+  REGION: asia-southeast3
   SERVICE_NAME: income-expense-frombot-staging
-  GAR_LOCATION: asia-southeast1
+  GAR_LOCATION: asia-southeast3
   REPOSITORY: income-expense-frombot
 
 jobs:
