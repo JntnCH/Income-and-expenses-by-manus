@@ -1,103 +1,64 @@
 const { google } = require('googleapis');
-
-/**
- * Health Check Module
- * Provides multiple levels of health checks for the application
- */
+const { parsePrivateKey, parseServiceAccountJson } = require('./utils/credentialsParser');
 
 class HealthCheckService {
   constructor() {
-    this.lastGoogleAuthCheck = null;
-    this.lastGoogleAuthCheckTime = 0;
-    this.lastCheckDuration = 0;
+    this.cache = {
+      lastCheck: null,
+      data: null,
+      ttl: 30000 // 30 seconds
+    };
   }
 
   /**
-   * Basic Health Check - Server is running
-   * Used for Docker HEALTHCHECK and quick probes
+   * Get basic health status (fast, no external calls)
    */
   getBasicHealth() {
     return {
-      status: 'ok',
-      message: 'Income & Expense Bot is running',
-      version: '2.1.0',
-      uptime: process.uptime(),
+      status: 'alive',
       timestamp: new Date().toISOString(),
-      environment: process.env.NODE_ENV || 'development'
+      uptime: process.uptime(),
+      memory: {
+        heapUsed: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
+        heapTotal: Math.round(process.memoryUsage().heapTotal / 1024 / 1024)
+      }
     };
   }
 
   /**
-   * Readiness Check - All critical dependencies are OK
-   * Used for Kubernetes readiness probes and deployment checks
+   * Get readiness status (includes dependency checks with caching)
    */
   async getReadinessHealth() {
-    const startTime = Date.now();
-    const checks = {
-      server: { status: 'ok', message: 'Server is running' },
-      environment: { status: 'unknown', message: '' },
-      google_auth: { status: 'unknown', message: '' },
-      google_sheets: { status: 'unknown', message: '' },
-      ocr_provider: { status: 'unknown', message: '' }
-    };
-
-    try {
-      // 1. Check Environment Variables
-      checks.environment = this.checkEnvironmentVariables();
-
-      // 2. Check Google Authentication (with caching)
-      const useCache = Date.now() - this.lastGoogleAuthCheckTime < 30000; // Cache for 30 seconds
-      if (useCache && this.lastGoogleAuthCheck) {
-        checks.google_auth = this.lastGoogleAuthCheck;
-      } else {
-        checks.google_auth = await this.checkGoogleAuthentication();
-        this.lastGoogleAuthCheck = checks.google_auth;
-        this.lastGoogleAuthCheckTime = Date.now();
-      }
-
-      // 3. Check Google Sheets Access (only if auth is OK)
-      if (checks.google_auth.status === 'ok') {
-        checks.google_sheets = await this.checkGoogleSheetsAccess();
-      } else {
-        checks.google_sheets = {
-          status: 'warning',
-          message: 'Skipped due to authentication failure'
-        };
-      }
-
-      // 4. Check OCR Provider
-      checks.ocr_provider = this.checkOCRProvider();
-
-    } catch (error) {
-      console.error('[HealthCheck] Error during readiness check:', error.message);
-      checks.server.status = 'degraded';
-      checks.server.message = error.message;
+    const now = Date.now();
+    if (this.cache.lastCheck && (now - this.cache.lastCheck) < this.cache.ttl) {
+      return this.cache.data;
     }
 
-    this.lastCheckDuration = Date.now() - startTime;
-
-    // Determine overall status
-    const allOk = Object.values(checks).every(c => 
-      c.status === 'ok' || c.status === 'warning'
-    );
-
-    return {
-      status: allOk ? 'ready' : 'not-ready',
-      checks,
-      duration: `${this.lastCheckDuration}ms`,
-      timestamp: new Date().toISOString()
+    const checks = {
+      environment: this.checkEnvironmentVariables(),
+      auth: await this.checkGoogleAuthentication(),
+      sheets: await this.checkGoogleSheetsAccess()
     };
+
+    const hasErrors = Object.values(checks).some(c => c.status === 'error');
+    const health = {
+      status: hasErrors ? 'not-ready' : 'ready',
+      timestamp: new Date().toISOString(),
+      checks
+    };
+
+    this.cache.lastCheck = now;
+    this.cache.data = health;
+    return health;
   }
 
   /**
-   * Startup Check - Full diagnostic for initialization
-   * Used during deployment and startup verification
+   * Get startup status (full diagnostics)
    */
   async getStartupHealth() {
-    const readiness = await this.getReadinessHealth();
-    
     return {
-      ...readiness,
+      status: 'startup',
+      timestamp: new Date().toISOString(),
       type: 'startup',
       details: {
         node_version: process.version,
@@ -108,6 +69,11 @@ class HealthCheckService {
         },
         uptime: process.uptime() + 's',
         platform: process.platform
+      },
+      checks: {
+        environment: this.checkEnvironmentVariables(),
+        auth: await this.checkGoogleAuthentication(),
+        sheets: await this.checkGoogleSheetsAccess()
       }
     };
   }
@@ -152,28 +118,36 @@ class HealthCheckService {
    */
   async checkGoogleAuthentication() {
     try {
-      const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-      const privateKey = process.env.GOOGLE_PRIVATE_KEY;
+      let credentials;
 
-      if (!email || !privateKey) {
-        return {
-          status: 'error',
-          message: 'Service account credentials not configured'
-        };
+      // Try JSON credentials first
+      if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
+        try {
+          credentials = parseServiceAccountJson(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+        } catch (e) {
+          console.error('[HealthCheck] JSON parsing failed:', e.message);
+          // Fall through to separate vars
+        }
       }
 
-      if (!privateKey.includes('BEGIN PRIVATE KEY')) {
-        return {
-          status: 'error',
-          message: 'Invalid private key format'
-        };
+      // Fall back to separate variables
+      if (!credentials) {
+        const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
+        const privateKeyRaw = process.env.GOOGLE_PRIVATE_KEY;
+
+        if (!email || !privateKeyRaw) {
+          return {
+            status: 'error',
+            message: 'Service account credentials not configured'
+          };
+        }
+
+        const privateKey = parsePrivateKey(privateKeyRaw);
+        credentials = { client_email: email, private_key: privateKey };
       }
 
       const auth = new google.auth.GoogleAuth({
-        credentials: {
-          client_email: email,
-          private_key: privateKey.replace(/\\n/g, '\n')
-        },
+        credentials,
         scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly']
       });
 
@@ -190,7 +164,7 @@ class HealthCheckService {
       return {
         status: 'ok',
         message: 'Google authentication successful',
-        email: email.substring(0, 5) + '...@' + email.split('@')[1]
+        email: credentials.client_email.substring(0, 5) + '...@' + credentials.client_email.split('@')[1]
       };
 
     } catch (error) {
@@ -207,8 +181,6 @@ class HealthCheckService {
   async checkGoogleSheetsAccess() {
     try {
       const spreadsheetId = process.env.GOOGLE_SPREADSHEET_ID;
-      const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-      const privateKey = process.env.GOOGLE_PRIVATE_KEY;
 
       if (!spreadsheetId) {
         return {
@@ -217,11 +189,25 @@ class HealthCheckService {
         };
       }
 
+      let credentials;
+
+      if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
+        try {
+          credentials = parseServiceAccountJson(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+        } catch (e) {
+          console.error('[HealthCheck] JSON parsing failed:', e.message);
+        }
+      }
+
+      if (!credentials) {
+        const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
+        const privateKeyRaw = process.env.GOOGLE_PRIVATE_KEY;
+        const privateKey = parsePrivateKey(privateKeyRaw);
+        credentials = { client_email: email, private_key: privateKey };
+      }
+
       const auth = new google.auth.GoogleAuth({
-        credentials: {
-          client_email: email,
-          private_key: privateKey.replace(/\\n/g, '\n')
-        },
+        credentials,
         scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly']
       });
 
@@ -232,51 +218,15 @@ class HealthCheckService {
       return {
         status: 'ok',
         message: `Connected to spreadsheet: "${response.data.properties.title}"`,
-        sheetCount: response.data.sheets?.length || 0
+        spreadsheetTitle: response.data.properties.title
       };
 
     } catch (error) {
-      // 404 means spreadsheet not found or no access
-      if (error.message.includes('404')) {
-        return {
-          status: 'error',
-          message: 'Spreadsheet not found or no access permission'
-        };
-      }
-
       return {
         status: 'error',
-        message: `Spreadsheet access failed: ${error.message}`
+        message: `Google Sheets access failed: ${error.message}`
       };
     }
-  }
-
-  /**
-   * Check OCR Provider
-   */
-  checkOCRProvider() {
-    const provider = process.env.OCR_PROVIDER || 'tesseract';
-    const supportedProviders = ['tesseract', 'google'];
-
-    if (!supportedProviders.includes(provider)) {
-      return {
-        status: 'warning',
-        message: `Unknown OCR provider: ${provider}. Supported: ${supportedProviders.join(', ')}`
-      };
-    }
-
-    return {
-      status: 'ok',
-      message: `OCR Provider: ${provider}`,
-      provider
-    };
-  }
-
-  /**
-   * Get last check duration
-   */
-  getLastCheckDuration() {
-    return this.lastCheckDuration;
   }
 }
 

@@ -43,12 +43,11 @@ jobs:
         service: ${{ env.SERVICE_NAME }}
         region: ${{ env.REGION }}
         image: ${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
-        # ✅ เปิดให้ Dialogflow เรียก Webhook ได้
+        # ✅ Allow Dialogflow to call webhook
         flags: --allow-unauthenticated --port=8080 --min-instances=0
         env_vars: |
           NODE_ENV=production
-          GOOGLE_SERVICE_ACCOUNT_EMAIL=${{ secrets.GOOGLE_SERVICE_ACCOUNT_EMAIL }}
-          GOOGLE_PRIVATE_KEY=${{ secrets.GOOGLE_PRIVATE_KEY }}
+          GOOGLE_SERVICE_ACCOUNT_JSON=${{ secrets.GCP_SA_KEY }}
           GOOGLE_SPREADSHEET_ID=1yPNCTj0RF9GHcOIuwLyqKECSIwF8oQ4cr2BVBidzFdU
           MONTHLY_SPREADSHEET_ID=16gOMnohl7v9RPTTqhHtJlMV6U65OJSiKDu02DIPdEwg
           DEBT_SPREADSHEET_ID=1FENTWNHjQIGBQ-GWjPhV7qf8Yh7Qdk2MqPMzRVeyZX0
