@@ -1,47 +1,51 @@
 const { google } = require('googleapis');
-const { JWT } = require('google-auth-library'); // ← import ตรงๆ
+const { JWT } = require('google-auth-library');
+const { parsePrivateKey, parseServiceAccountJson } = require('../utils/credentialsParser');
 
 /**
  * Google Sheets Service
- * Fixed: OpenSSL 3.x compatibility + Private Key parsing
+ * Fixed: Centralized credentials parsing for all environments
  */
 
 function getAuthClient() {
-  // ✅ วิธีที่ 1 (แนะนำ): ใช้ JSON ทั้งก้อนจาก Secret Manager
-  if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
-    try {
-      const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
-      return new JWT({
-        email: credentials.client_email,
-        key: credentials.private_key, // JSON มี \n ที่ถูกต้องอยู่แล้ว
-        scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-      });
-    } catch (e) {
-      console.error('[AUTH] Failed to parse GOOGLE_SERVICE_ACCOUNT_JSON:', e.message);
+  try {
+    // ✅ Method 1 (Recommended): Use full JSON from Secret Manager
+    if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
+      try {
+        const credentials = parseServiceAccountJson(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+        return new JWT({
+          email: credentials.client_email,
+          key: credentials.private_key,
+          scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+        });
+      } catch (e) {
+        console.error('[AUTH] GOOGLE_SERVICE_ACCOUNT_JSON parsing failed:', e.message);
+        // Fall through to method 2
+      }
     }
+
+    // ✅ Method 2: Use separate environment variables
+    const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
+    const privateKeyRaw = process.env.GOOGLE_PRIVATE_KEY;
+
+    if (!email || !privateKeyRaw) {
+      throw new Error(
+        '[AUTH] Missing credentials. Provide either GOOGLE_SERVICE_ACCOUNT_JSON or both ' +
+        'GOOGLE_SERVICE_ACCOUNT_EMAIL and GOOGLE_PRIVATE_KEY'
+      );
+    }
+
+    const privateKey = parsePrivateKey(privateKeyRaw);
+
+    return new JWT({
+      email,
+      key: privateKey,
+      scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+    });
+  } catch (error) {
+    console.error('[AUTH] Failed to initialize JWT client:', error.message);
+    throw error;
   }
-
-  // ✅ วิธีที่ 2: ใช้ Separate Env Vars (แก้ลำดับ parse ใหม่)
-  let privateKey = process.env.GOOGLE_PRIVATE_KEY || '';
-
-  // Step 1: เอา quote ออกก่อน
-  if (privateKey.startsWith('"') && privateKey.endsWith('"')) {
-    privateKey = privateKey.slice(1, -1);
-  }
-
-  // Step 2: แปลง \\n → \n (ทุกกรณี ไม่ต้อง check ก่อน)
-  privateKey = privateKey.replace(/\\n/g, '\n');
-
-  // Step 3: Validate ว่า key มี header ที่ถูกต้อง
-  if (!privateKey.includes('-----BEGIN')) {
-    console.error('[AUTH] GOOGLE_PRIVATE_KEY format is invalid!');
-  }
-
-  return new JWT({
-    email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-    key: privateKey,
-    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-  });
 }
 
 function getBangkokNow() {
@@ -147,7 +151,6 @@ async function getBalanceSummary() {
     };
 
   } catch (err) {
-    // ✅ Log เต็มๆ เพอ debug ง่ายขึ้น
     console.error('[BALANCE ERROR]', err.message);
     console.error('[BALANCE ERROR STACK]', err.stack);
     throw err;
