@@ -45,8 +45,6 @@ jobs:
         flags: --allow-unauthenticated --port=8080 --min-instances=0
         env_vars: |
           NODE_ENV=staging
-          GOOGLE_SERVICE_ACCOUNT_EMAIL=${{ secrets.GCP_SA_KEY }}
-          GOOGLE_PRIVATE_KEY=${{ secrets.GOOGLE_PRIVATE_KEY }}
           GOOGLE_SPREADSHEET_ID=1yPNCTj0RF9GHcOIuwLyqKECSIwF8oQ4cr2BVBidzFdU
           MONTHLY_SPREADSHEET_ID=16gOMnohl7v9RPTTqhHtJlMV6U65OJSiKDu02DIPdEwg
           DEBT_SPREADSHEET_ID=1FENTWNHjQIGBQ-GWjPhV7qf8Yh7Qdk2MqPMzRVeyZX0
