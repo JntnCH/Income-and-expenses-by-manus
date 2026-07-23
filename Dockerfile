@@ -1,41 +1,35 @@
-# ใช้ Node.js เป็น base image
+# Example Dockerfile configuration for Puppeteer
 FROM node:20-slim
 
-# ติดตั้ง dependencies สำหรับ Tesseract OCR และ Python
+# Install system dependencies required for running headless Chrome/Chromium
 RUN apt-get update && apt-get install -y \
-    tesseract-ocr \
-    tesseract-ocr-tha \
-    tesseract-ocr-eng \
-    python3 \
-    python3-pip \
-    python3-venv \
-    curl \
+    wget \
+    gnupg \
+    ca-certificates \
+    procps \
+    libgconf-2-4 \
+    libatk1.0-0 \
+    libatk-bridge2.0-0 \
+    libgdk-pixbuf2.0-0 \
+    libgtk-3-0 \
+    libgbm-dev \
+    libnss3 \
+    libxss1 \
+    libasound2 \
+    libxtst6 \
+    libxshmfence1 \
+    --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Copy package files
 COPY package*.json ./
-COPY requirements.txt ./
 
-# ติดตั้ง Node.js dependencies
-RUN npm install --omit=dev
+# Install production dependencies
+RUN npm ci --only=production
 
-# ติดตั้ง Python dependencies (ใช้ --break-system-packages สำหรับ debian-based slim image)
-RUN pip3 install --no-cache-dir -r requirements.txt --break-system-packages
-
-# Copy source code
 COPY . .
 
-ENV NODE_OPTIONS="--openssl-legacy-provider"
-
-# Cloud Run จะส่งพอร์ตมาทาง environment variable $PORT (ปกติคือ 8080)
-ENV PORT=8080
 EXPOSE 8080
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:8080/health || exit 1
-
-# Start server
-CMD ["node", "src/index.js"]
+CMD [ "node", "src/index.js" ]
