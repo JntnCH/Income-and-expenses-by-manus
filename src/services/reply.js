@@ -28,7 +28,7 @@ app.post('/telegram/webhook', async (req, res) => {
         // 2. ไปดึงข้อมูลจากไฟล์ที่ 2 แท็บ Monthly-expense 2026
         const response = await sheets.spreadsheets.values.get({
           spreadsheetId: process.env.MONTHLY_SPREADSHEET_ID || process.env.LOCAL_MONTHLY_SHEET_ID,
-          range: 'Monthly-expense 2026!A4:H', // โหลดคอลัมน์ A ถึง H ตั้งแต่แถว 4
+          range: 'Monthly-expense 2026!A4:I', // โหลดคอลัมน์ A ถึง I ตั้งแต่แถว 4
         });
 
         const rows = response.data.values;
@@ -51,10 +51,10 @@ app.post('/telegram/webhook', async (req, res) => {
         const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
 
         if (matchedRowIndex !== -1) {
-          // 3. ทำการเขียนค่า TRUE (ติ๊กถูก) ไปที่พิกัดคอลัมน์ H ของแถวนั้นโดยตรง
+          // 3. ทำการเขียนค่า TRUE (ติ๊กถูก) ไปที่พิกัดคอลัมน์ I ของแถวนั้นโดยตรง
           await sheets.spreadsheets.values.update({
             spreadsheetId: process.env.MONTHLY_SPREADSHEET_ID || process.env.LOCAL_MONTHLY_SHEET_ID,
-            range: `Monthly-expense 2026!H${matchedRowIndex}`,
+            range: `Monthly-expense 2026!I${matchedRowIndex}`,
              valueInputOption: 'USER_ENTERED',
              requestBody: {
                values: [[true]] // ส่งค่า boolean true เพื่อติ๊กช่อง Checkbox ในชีต
