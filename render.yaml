@@ -1,0 +1,26 @@
+# Render service definition for deploying the Express app
+# Notes:
+# - Replace `branch` value if your default branch is not `main`.
+# - Do NOT place secrets (private keys, API keys) in this file. Add them in the Render dashboard under Environment > Secrets.
+
+services:
+  - type: web
+    name: income-expenses-api
+    env: node
+    branch: main
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+# Recommended environment variables to add in the Render dashboard (as secrets):
+# - GOOGLE_SERVICE_ACCOUNT_EMAIL
+# - GOOGLE_PRIVATE_KEY  (keep as literal with \n or as multi-line secret; code will replace \n -> newline)
+# - GOOGLE_SPREADSHEET_ID
+# - OCR_PROVIDER
+# - OPENAI_API_KEY
+# - GEMINI_API_KEY
