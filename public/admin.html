@@ -59,6 +59,11 @@
             <!-- Main Content -->
             <div class="col-md-8">
                 <div class="card p-4">
+                    <div class="mb-3">
+                        <label class="form-label">Admin API Token</label>
+                        <input id="admin-token" type="password" class="form-control" autocomplete="current-password" placeholder="วาง ADMIN_API_TOKEN เพื่อปลดล็อกการจัดการ">
+                        <div class="form-text">Token จะเก็บไว้เฉพาะ session ของเบราว์เซอร์นี้ และจะไม่แสดงผลกลับจาก server</div>
+                    </div>
                     <ul class="nav nav-tabs mb-4" id="configTabs">
                         <li class="nav-item">
                             <a class="nav-link active" href="#" data-tab="basic">พื้นฐาน & Google</a>
@@ -74,19 +79,7 @@
                     <form id="configForm">
                         <!-- Basic Config -->
                         <div id="tab-basic" class="tab-content">
-                            <div class="mb-3">
-                                <label class="form-label">Google Service Account Email</label>
-                                <input type="email" class="form-control" name="GOOGLE_SERVICE_ACCOUNT_EMAIL" placeholder="xxx@project.iam.gserviceaccount.com">
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Google Private Key</label>
-                                <textarea class="form-control" name="GOOGLE_PRIVATE_KEY" rows="4" placeholder="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"></textarea>
-                                <div class="form-text text-danger">ระวัง: อย่าแชร์คีย์นี้ให้ใคร</div>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Main Spreadsheet ID</label>
-                                <input type="text" class="form-control" name="GOOGLE_SPREADSHEET_ID" placeholder="ID จาก URL ของ Google Sheets">
-                            </div>
+                            <div class="alert alert-info small mb-0">Google credentials และ Spreadsheet ID ต้องตั้งเป็น deployment secrets เท่านั้น ระบบจะไม่รับหรือแสดงค่า secrets ผ่านหน้าเว็บ</div>
                         </div>
 
                         <!-- OCR & AI Config -->
@@ -100,14 +93,7 @@
                                     <option value="iapp">iApp OCR</option>
                                 </select>
                             </div>
-                            <div class="mb-3">
-                                <label class="form-label">OpenAI API Key (สำหรับ AI Analyst)</label>
-                                <input type="password" class="form-control" name="OPENAI_API_KEY" placeholder="sk-...">
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Gemini API Key (สำหรับ GAS AI)</label>
-                                <input type="password" class="form-control" name="GEMINI_API_KEY" placeholder="AIza...">
-                            </div>
+                            <div class="alert alert-info small mb-0">API keys สำหรับ AI ต้องตั้งเป็น deployment secrets เท่านั้น</div>
                         </div>
 
                         <!-- Debug -->
@@ -148,9 +134,18 @@
         });
 
         // Load config
+        function adminHeaders() {
+            const tokenInput = document.getElementById('admin-token');
+            const token = tokenInput.value || sessionStorage.getItem('adminApiToken') || '';
+            if (!token) throw new Error('กรุณาระบุ Admin API Token');
+            sessionStorage.setItem('adminApiToken', token);
+            return { 'Authorization': `Bearer ${token}` };
+        }
+
         async function loadCurrentConfig() {
             try {
-                const res = await fetch('/api/admin/config');
+                const res = await fetch('/api/admin/config', { headers: adminHeaders() });
+                if (!res.ok) throw new Error('Token ไม่ถูกต้อง หรือ Admin API ยังไม่ได้เปิดใช้งาน');
                 const data = await res.json();
                 
                 const form = document.getElementById('configForm');
@@ -173,7 +168,7 @@
             try {
                 const res = await fetch('/api/admin/config', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { ...adminHeaders(), 'Content-Type': 'application/json' },
                     body: JSON.stringify(data)
                 });
                 
@@ -192,7 +187,8 @@
         async function checkSystemStatus() {
             document.getElementById('system-status').innerText = 'Checking...';
             try {
-                const res = await fetch('/api/debug-auth-data');
+                const res = await fetch('/api/debug-auth-data', { headers: adminHeaders() });
+                if (!res.ok) throw new Error('ไม่สามารถเข้าถึงข้อมูลสถานะได้');
                 const data = await res.json();
                 
                 // Update badges based on logs
@@ -212,7 +208,7 @@
                 // Simple OCR/AI check (based on presence of keys)
                 const form = document.getElementById('configForm');
                 updateBadge('status-ocr', form.elements['OCR_PROVIDER'].value ? 'success' : 'error');
-                updateBadge('status-ai', form.elements['OPENAI_API_KEY'].value ? 'success' : 'error');
+                updateBadge('status-ai', data.logs.some(l => l.title === 'Authentication Status' && l.status === 'success') ? 'success' : 'error');
 
                 // Update debug logs
                 const logBox = document.getElementById('debug-logs');
@@ -229,10 +225,7 @@
         }
 
         // Initial load
-        window.onload = () => {
-            loadCurrentConfig();
-            checkSystemStatus();
-        };
+        window.onload = () => document.getElementById('admin-token').focus();
     </script>
 </body>
 </html>

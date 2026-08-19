@@ -97,10 +97,17 @@ router.post('/dialogflow', async (req, res) => {
       case 'บันทึกการซื้อ': {
         const action = intentName.includes('ซื้อ') ? 'ซื้อ' : 'ขาย';
         const assetType = extractEntity(parameters, ['Asset-type', 'asset-type']) || 'อื่นๆ';
-        const assetName = parameters.item || 'ไม่ระบุ';
-        const quantity = parameters.number || 0;
-        const pricePerUnit = parameters['unit-currency']?.amount || 0;
-        const totalAmount = amount || (quantity * pricePerUnit) || 0;
+        const assetName = String(parameters.item || '').trim();
+        const quantity = toNumber(parameters.number);
+        const pricePerUnit = toNumber(parameters['unit-currency']?.amount);
+        const explicitTotal = firstNumber(
+          parameters.totalAmount,
+          parameters['total-amount'],
+          parameters['total-currency']?.amount,
+          parameters.amount,
+        );
+        const totalAmount = explicitTotal || (quantity * pricePerUnit);
+        const note = extractEntity(parameters, ['note', 'memo', 'remark']) || '';
 
         await saveInvestmentRecord({
           action,
@@ -109,8 +116,10 @@ router.post('/dialogflow', async (req, res) => {
           quantity,
           pricePerUnit,
           totalAmount,
+          account,
           platform: userInfo.platform,
-          recorder: recorderLabel
+          recorder: recorderLabel,
+          note,
         });
         
         if (action === 'ซื้อ') {
@@ -174,6 +183,19 @@ function extractEntity(parameters, keys) {
     if (typeof val === 'string') return val;
   }
   return null;
+}
+
+function toNumber(value) {
+  const parsed = Number(value ?? 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function firstNumber(...values) {
+  for (const value of values) {
+    const number = toNumber(value);
+    if (number > 0) return number;
+  }
+  return 0;
 }
 
 module.exports = router;

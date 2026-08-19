@@ -3,9 +3,11 @@ const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
+const multer = require('multer');
 const path = require("path");
 const { google } = require('googleapis');
 const healthCheckService = require('./healthCheck');
+const { requireAdminToken } = require('./middleware/adminAuth');
 
 const dialogflowRoutes = require("./routes/dialogflow");
 const ocrRoutes = require("./routes/ocr");
@@ -13,6 +15,10 @@ const fs = require("fs");
 
 const app = express();
 const PORT = process.env.PORT || 8080;
+const allowedOrigins = (process.env.CORS_ALLOWED_ORIGINS || '')
+  .split(',')
+  .map(origin => origin.trim())
+  .filter(Boolean);
 
 // ============================================================
 // Middleware
@@ -20,10 +26,17 @@ const PORT = process.env.PORT || 8080;
 app.use(helmet({
   contentSecurityPolicy: false, // ปิด CSP ชั่วคราวเพื่อให้รันสคริปต์ในหน้า debug ได้ง่าย
 }));
-app.use(cors());
+app.use(cors({
+  origin(origin, callback) {
+    // Server-to-server callers such as Dialogflow do not send an Origin header.
+    if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(new Error('Origin is not allowed by CORS policy'));
+  },
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Admin-Token'],
+}));
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
-app.use(express.static(path.join(__dirname, "../public")));
 
 // Rate Limiting — ป้องกัน abuse
 const limiter = rateLimit({
@@ -32,6 +45,8 @@ const limiter = rateLimit({
   message: { error: "Too many requests, please try again later." }
 });
 app.use("/api/", limiter);
+app.use(['/api/admin', '/api/debug-auth-data'], requireAdminToken);
+app.use(express.static(path.join(__dirname, "../public")));
 
 // ============================================================
 // Debug Routes
@@ -49,25 +64,24 @@ app.get("/debug-auth", (req, res) => {
 // 2. API สำหรับดึง Config ปัจจุบัน
 app.get("/api/admin/config", (req, res) => {
   const config = {
-    GOOGLE_SERVICE_ACCOUNT_EMAIL: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || "",
-    GOOGLE_SPREADSHEET_ID: process.env.GOOGLE_SPREADSHEET_ID || "",
+    googleSheetsConfigured: Boolean(process.env.GOOGLE_SERVICE_ACCOUNT_JSON || process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL),
+    spreadsheetIdSuffix: process.env.GOOGLE_SPREADSHEET_ID ? process.env.GOOGLE_SPREADSHEET_ID.slice(-6) : "",
     OCR_PROVIDER: process.env.OCR_PROVIDER || "tesseract",
-    OPENAI_API_KEY: process.env.OPENAI_API_KEY ? "********" : "",
-    GEMINI_API_KEY: process.env.GEMINI_API_KEY ? "********" : ""
+    aiAnalystConfigured: Boolean(process.env.OPENAI_API_KEY),
   };
   res.json(config);
 });
 
 // 3. API สำหรับบันทึก Config (Runtime Update)
 app.post("/api/admin/config", (req, res) => {
-  const newConfig = req.body;
-  Object.keys(newConfig).forEach(key => {
-    if (newConfig[key] && !newConfig[key].includes('***')) {
-      process.env[key] = newConfig[key];
-    }
-  });
+  const provider = String(req.body?.OCR_PROVIDER || '').trim();
+  const allowedProviders = ['tesseract', 'aws', 'iapp', 'appman', 'spaceocr', 'google', 'cloud-vision'];
+  if (!allowedProviders.includes(provider)) {
+    return res.status(400).json({ error: 'OCR_PROVIDER is not supported' });
+  }
+  process.env.OCR_PROVIDER = provider;
   console.log("[ADMIN] Configuration updated in runtime");
-  res.json({ success: true, message: "Runtime config updated" });
+  res.json({ success: true, message: "OCR provider updated for this running instance" });
 });
 
 // 4. API สำหรับส่งข้อมูล Debug (เรียกจากหน้า HTML)
@@ -225,6 +239,18 @@ app.get("/", (req, res) => {
 app.use((req, res) => res.status(404).json({ error: "Endpoint not found" }));
 app.use((err, req, res, next) => {
   console.error("[ERROR]", err.message);
+  if (err instanceof multer.MulterError) {
+    const message = err.code === 'LIMIT_FILE_SIZE'
+      ? 'ไฟล์มีขนาดเกิน 10 MB'
+      : 'ไฟล์อัปโหลดไม่ถูกต้อง';
+    return res.status(400).json({ error: message, code: err.code });
+  }
+  if (err.message === 'รองรับเฉพาะไฟล์ภาพ JPEG, PNG, HEIC เท่านั้น') {
+    return res.status(415).json({ error: err.message });
+  }
+  if (err.message === 'Origin is not allowed by CORS policy') {
+    return res.status(403).json({ error: 'Origin is not allowed' });
+  }
   res.status(500).json({ error: "Internal server error", detail: err.message });
 });
 

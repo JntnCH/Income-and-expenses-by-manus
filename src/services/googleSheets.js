@@ -60,6 +60,55 @@ function getBangkokDateString() {
   return formatThaiDate(getBangkokNow());
 }
 
+function toNonNegativeNumber(value, fieldName) {
+  const parsed = Number(value ?? 0);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    const error = new Error(`[VALIDATION] ${fieldName} ต้องเป็นตัวเลขตั้งแต่ 0 ขึ้นไป`);
+    error.code = 'INVALID_INVESTMENT_RECORD';
+    throw error;
+  }
+  return parsed;
+}
+
+function buildInvestmentRow(data, date = getBangkokDateString()) {
+  const action = String(data.action || '').trim();
+  if (!['ซื้อ', 'ขาย'].includes(action)) {
+    const error = new Error('[VALIDATION] action ต้องเป็น ซื้อ หรือ ขาย');
+    error.code = 'INVALID_INVESTMENT_RECORD';
+    throw error;
+  }
+
+  const assetName = String(data.assetName || '').trim();
+  if (!assetName || assetName === 'ไม่ระบุ') {
+    const error = new Error('[VALIDATION] กรุณาระบุชื่อสินทรัพย์');
+    error.code = 'INVALID_INVESTMENT_RECORD';
+    throw error;
+  }
+
+  const quantity = toNonNegativeNumber(data.quantity, 'quantity');
+  const pricePerUnit = toNonNegativeNumber(data.pricePerUnit, 'pricePerUnit');
+  const totalAmount = toNonNegativeNumber(data.totalAmount, 'totalAmount');
+  if (totalAmount <= 0) {
+    const error = new Error('[VALIDATION] totalAmount ต้องมากกว่า 0');
+    error.code = 'INVALID_INVESTMENT_RECORD';
+    throw error;
+  }
+
+  return [
+    date,
+    action,
+    assetName,
+    String(data.assetType || 'อื่นๆ').trim() || 'อื่นๆ',
+    quantity,
+    pricePerUnit,
+    totalAmount,
+    String(data.account || '').trim(),
+    String(data.platform || 'Unknown').trim(),
+    String(data.recorder || 'ไม่ระบุ').trim(),
+    String(data.note || '').trim(),
+  ];
+}
+
 async function saveRecord(data) {
   const auth = getAuthClient();
   const sheets = google.sheets({ version: 'v4', auth });
@@ -83,6 +132,23 @@ async function saveRecord(data) {
   await sheets.spreadsheets.values.append({
     spreadsheetId,
     range: `${sheetName}!A:H`,
+    valueInputOption: 'USER_ENTERED',
+    requestBody: { values: [row] },
+  });
+
+  return { success: true, row };
+}
+
+async function saveInvestmentRecord(data) {
+  const auth = getAuthClient();
+  const sheets = google.sheets({ version: 'v4', auth });
+  const spreadsheetId = process.env.GOOGLE_SPREADSHEET_ID;
+  const sheetName = process.env.GOOGLE_INVESTMENT_SHEET_NAME || 'การลงทุน';
+  const row = buildInvestmentRow(data);
+
+  await sheets.spreadsheets.values.append({
+    spreadsheetId,
+    range: `${sheetName}!A:K`,
     valueInputOption: 'USER_ENTERED',
     requestBody: { values: [row] },
   });
@@ -157,4 +223,9 @@ async function getBalanceSummary() {
   }
 }
 
-module.exports = { saveRecord, getBalanceSummary };
+module.exports = {
+  saveRecord,
+  saveInvestmentRecord,
+  getBalanceSummary,
+  buildInvestmentRow,
+};

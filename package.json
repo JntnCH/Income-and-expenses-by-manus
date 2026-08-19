@@ -6,6 +6,8 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
+    "test": "node --test test/*.test.js",
+    "test:e2e": "node --test test/google-sheets.e2e.test.js",
     "gcp-build": "pip3 install -r requirements.txt"
   },
   "dependencies": {
