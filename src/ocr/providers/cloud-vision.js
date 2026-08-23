@@ -1,26 +1,25 @@
 const vision = require('@google-cloud/vision');
-const { parsePrivateKey } = require('../../utils/credentialsParser');
+const { parsePrivateKey, parseServiceAccountJson } = require('../../utils/credentialsParser');
 
 let client;
 
-try {
-  const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-  const privateKeyRaw = process.env.GOOGLE_PRIVATE_KEY;
+function getClient() {
+  if (client) return client;
 
-  if (!email || !privateKeyRaw) {
-    throw new Error('Missing GOOGLE_SERVICE_ACCOUNT_EMAIL or GOOGLE_PRIVATE_KEY');
+  let credentials;
+  if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
+    credentials = parseServiceAccountJson(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+  } else {
+    const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
+    const privateKeyRaw = process.env.GOOGLE_PRIVATE_KEY;
+    if (!email || !privateKeyRaw) {
+      throw new Error('Missing GOOGLE_SERVICE_ACCOUNT_JSON or GOOGLE_SERVICE_ACCOUNT_EMAIL/GOOGLE_PRIVATE_KEY');
+    }
+    credentials = { client_email: email, private_key: parsePrivateKey(privateKeyRaw) };
   }
 
-  const privateKey = parsePrivateKey(privateKeyRaw);
-
-  client = new vision.ImageAnnotatorClient({
-    credentials: {
-      client_email: email,
-      private_key: privateKey
-    }
-  });
-} catch (error) {
-  console.error('[Vision] Failed to initialize client:', error.message);
+  client = new vision.ImageAnnotatorClient({ credentials });
+  return client;
 }
 
 /**
@@ -29,16 +28,14 @@ try {
  */
 async function recognize(imageInput) {
   try {
-    if (!client) {
-      throw new Error('[Vision] Client not initialized - check credentials');
-    }
+    const visionClient = getClient();
 
     // Support both Buffer and File Path
     const imagePayload = typeof imageInput === 'string'
       ? { source: { filename: imageInput } }
       : { content: imageInput };
 
-    const [result] = await client.textDetection({ image: imagePayload });
+    const [result] = await visionClient.textDetection({ image: imagePayload });
     const detections = result.textAnnotations;
 
     if (detections && detections.length > 0) {

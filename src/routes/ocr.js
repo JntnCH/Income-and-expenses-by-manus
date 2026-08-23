@@ -69,7 +69,10 @@ router.post('/scan', upload.single('file'), async (req, res) => {
 
   } catch (error) {
     console.error('[OCR ROUTE ERROR]', error.message);
-    return res.status(500).json({ error: error.message });
+    const invalidInput = error.message.includes('OCR provider') || error.message.includes('รองรับเฉพาะไฟล์ภาพ');
+    return res.status(invalidInput ? 400 : 502).json({
+      error: invalidInput ? error.message : 'ไม่สามารถประมวลผล OCR ได้',
+    });
   }
 });
 
@@ -119,6 +122,19 @@ router.get('/providers', (req, res) => {
     current: process.env.OCR_PROVIDER || 'tesseract',
     providers: getAvailableProviders()
   });
+});
+
+router.use((error, req, res, next) => {
+  if (error instanceof multer.MulterError) {
+    const message = error.code === 'LIMIT_FILE_SIZE'
+      ? 'ไฟล์มีขนาดเกิน 10 MB'
+      : 'ไฟล์อัปโหลดไม่ถูกต้อง';
+    return res.status(400).json({ error: message, code: error.code });
+  }
+  if (error.message === 'รองรับเฉพาะไฟล์ภาพ JPEG, PNG, HEIC เท่านั้น') {
+    return res.status(415).json({ error: error.message });
+  }
+  return next(error);
 });
 
 module.exports = router;
