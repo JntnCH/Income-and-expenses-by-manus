@@ -1,8 +1,11 @@
 const express = require('express');
+const { randomUUID } = require('crypto');
 const router = express.Router();
 const { saveRecord, saveInvestmentRecord, getBalanceSummary } = require("../services/googleSheets");
 const { queryExcelData } = require("../services/excelQueryService");
 const { extractUser, formatUserLabel } = require('../utils/userExtractor');
+const { renderBalanceChart } = require('../services/balanceChart');
+const { isStorageConfigured, uploadPublicObject } = require('../services/supabaseStorage');
 const {
   buildDialogflowResponse,
   buildIncomeConfirmation,
@@ -49,6 +52,7 @@ router.post('/dialogflow', async (req, res) => {
                  'ไม่ระบุ';
 
     let responseText = '';
+    let imageUri = null;
 
     switch (intentName) {
       case 'บันทึกรายรับ': {
@@ -86,6 +90,7 @@ router.post('/dialogflow', async (req, res) => {
         try {
           const summary = await getBalanceSummary();
           responseText = buildBalanceSummary(summary);
+          imageUri = await createBalanceChartImage(summary);
         } catch (err) {
           console.error('[BALANCE ERROR]', err.message);
           responseText = `❌ ไม่สามารถดึงยอดคงเหลือได้: ${err.message}`;
@@ -141,7 +146,7 @@ router.post('/dialogflow', async (req, res) => {
       }
     }
 
-    return res.json(buildDialogflowResponse(responseText));
+    return res.json(buildDialogflowResponse(responseText, imageUri));
 
   } catch (error) {
     console.error('[DIALOGFLOW ERROR]', error.message);
@@ -174,6 +179,30 @@ function extractEntity(parameters, keys) {
     if (typeof val === 'string') return val;
   }
   return null;
+}
+
+async function createBalanceChartImage(summary) {
+  if (!isStorageConfigured()) {
+    console.warn('[IMAGE] Supabase Storage is not configured; using text fallback');
+    return null;
+  }
+
+  try {
+    const rendered = await renderBalanceChart(summary);
+    const now = new Date();
+    const dateKey = now.toISOString().slice(0, 10);
+    const objectPath = `balance/${dateKey}/${randomUUID()}.jpg`;
+    const upload = await uploadPublicObject(rendered.buffer, {
+      objectPath,
+      contentType: rendered.contentType
+    });
+
+    console.log('[IMAGE] Balance chart uploaded:', upload.objectPath);
+    return upload.url;
+  } catch (error) {
+    console.error('[IMAGE] Balance chart generation/upload failed:', error.message);
+    return null;
+  }
 }
 
 module.exports = router;

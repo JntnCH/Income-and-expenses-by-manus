@@ -57,6 +57,11 @@ GOOGLE_SERVICE_ACCOUNT_EMAIL=...
 GOOGLE_PRIVATE_KEY="..."
 GOOGLE_SPREADSHEET_ID=...
 OPENAI_API_KEY=... # สำหรับ AI Analyst ใน Webhook
+
+# สำหรับสร้างและเก็บภาพสรุปยอดผ่าน Supabase Storage
+SUPABASE_URL=https://<project-ref>.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=... # หรือใช้ SUPABASE_SECRET_KEY=...; ตั้งเป็น Server-only บน Vercel
+SUPABASE_STORAGE_BUCKET=income-expense-images
 ```
 
 ### ขั้นตอนที่ 3 — ติดตั้ง Google Apps Script (แนะนำ)
@@ -74,6 +79,7 @@ OPENAI_API_KEY=... # สำหรับ AI Analyst ใน Webhook
 | `POST` | `/webhook/dialogflow` | Dialogflow Webhook หลัก (รวม AI Query) |
 | `POST` | `/api/ocr/scan` | สแกนสลิป/ใบเสร็จ (JSON response) |
 | `GET` | `/health` | Health check พร้อมสถานะระบบ |
+| `GET` | `/health/startup` | ตรวจสอบ Google Sheets และความพร้อมของ Supabase image storage |
 
 ---
 
@@ -81,6 +87,12 @@ OPENAI_API_KEY=... # สำหรับ AI Analyst ใน Webhook
 
 **ผู้ใช้:** "เดือนนี้ทำงานได้กี่วัน"
 **บอท:** "จากการตรวจสอบรายการรายรับในเดือนกรกฎาคม 2569 พบรายการ 'ค่าแรง' ทั้งหมด 1 วัน คือวันที่ 03/07/2569 ครับ"
+
+### ภาพสรุปยอดสำหรับ Telegram และ LINE
+
+เมื่อเรียก Intent `CheckBalance` หรือ `เช็คยอด` ระบบจะสร้างภาพ JPEG แบบ deterministic ขนาด 240×240 พิกเซล อัปโหลดไปยัง Supabase Storage bucket `income-expense-images` แล้วส่ง Dialogflow image response กลับไป ภาพนี้จะถูกแสดงผ่าน Dialogflow integrations ของ Telegram และ LINE หากตั้งค่า `SUPABASE_SERVICE_ROLE_KEY` หรือ `SUPABASE_SECRET_KEY` บน Vercel แล้ว
+
+ห้ามใส่ service role/secret key ใน frontend, Git repository หรือไฟล์ที่เปิดเผยต่อสาธารณะ หากยังไม่ได้ตั้งค่า key ระบบจะคงตอบกลับเป็นข้อความตามเดิมเพื่อไม่ให้ Webhook ล้มเหลว
 
 ---
 

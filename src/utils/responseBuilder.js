@@ -1,17 +1,29 @@
 /**
  * Response Builder Utility
- * สร้างข้อความตอบกลับสำหรับ Dialogflow ในรูปแบบต่างๆ
+ * สร้างข้อความและ rich response สำหรับ Dialogflow integrations
  */
 
 /**
  * สร้าง Dialogflow Fulfillment Response
+ *
+ * Dialogflow จะนำ image message นี้ไปแปลงเป็น image message ของ Telegram/LINE
+ * เมื่อปลายทางเปิดใช้ integration ของ Dialogflow อยู่
  */
-function buildDialogflowResponse(text) {
-  return {
-    fulfillmentMessages: [
-      { text: { text: [text] } }
-    ]
-  };
+function buildDialogflowResponse(text, imageUri = null) {
+  const fulfillmentMessages = [
+    { text: { text: [String(text || '')] } }
+  ];
+
+  if (typeof imageUri === 'string' && /^https:\/\//i.test(imageUri)) {
+    fulfillmentMessages.push({
+      image: {
+        imageUri,
+        accessibilityText: 'ภาพสรุปยอดการเงิน'
+      }
+    });
+  }
+
+  return { fulfillmentMessages };
 }
 
 /**
@@ -91,10 +103,9 @@ function buildBalanceSummary(summary) {
     itemsText = '- ยังไม่มีรายการวันนี้';
   }
 
-  // สร้างส่วนแสดงยอดแยกบัญชี
   let accountText = '';
   if (summary.accountBalances && summary.accountBalances.length > 0) {
-    accountText = '\n🏦 ยอดคงเหลือแต่ล่ะบัญชี\n' + 
+    accountText = '\n🏦 ยอดคงเหลือแต่ล่ะบัญชี\n' +
       summary.accountBalances
         .map(acc => ` - ${acc.name} : ${formatAmount(acc.amount)} บาท`)
         .join('\n');
@@ -108,15 +119,12 @@ function buildBalanceSummary(summary) {
     `💸 รายรับวันนี้  ${formatAmount(summary.dailyIncome)} บาท\n` +
     `🛍️ รายจ่ายวันนี้ ${formatAmount(summary.dailyExpense)} บาท\n` +
     `💰 รายรับเดือนนี้  ${formatAmount(summary.monthlyIncome)} บาท\n` +
-    `🛒 รายจ่ายเดือนนี้  ${formatAmount(summary.monthlyExpense)} บาท\n` +
+    `🛒 รายจ่ายเดือนนี้ ${formatAmount(summary.monthlyExpense)} บาท\n` +
     `${accountText}\n\n`+
     `🪙 ยอดรวมทุกบัญชี ${formatAmount(summary.balance)} บาท`
   );
 }
 
-/**
- * จัดรูปแบบตัวเลขเงิน
- */
 function formatAmount(amount) {
   return parseFloat(amount || 0).toLocaleString('th-TH', {
     minimumFractionDigits: 2,

@@ -1,5 +1,6 @@
 const { google } = require('googleapis');
 const { parsePrivateKey, parseServiceAccountJson } = require('./utils/credentialsParser');
+const { isStorageConfigured } = require('./services/supabaseStorage');
 
 class HealthCheckService {
   constructor() {
@@ -37,7 +38,8 @@ class HealthCheckService {
     const checks = {
       environment: this.checkEnvironmentVariables(),
       auth: await this.checkGoogleAuthentication(),
-      sheets: await this.checkGoogleSheetsAccess()
+      sheets: await this.checkGoogleSheetsAccess(),
+      imageStorage: this.checkImageStorageConfiguration()
     };
 
     const hasErrors = Object.values(checks).some(c => c.status === 'error');
@@ -73,7 +75,8 @@ class HealthCheckService {
       checks: {
         environment: this.checkEnvironmentVariables(),
         auth: await this.checkGoogleAuthentication(),
-        sheets: await this.checkGoogleSheetsAccess()
+        sheets: await this.checkGoogleSheetsAccess(),
+        imageStorage: this.checkImageStorageConfiguration()
       }
     };
   }
@@ -91,6 +94,9 @@ class HealthCheckService {
     const optional = [
       'OPENAI_API_KEY',
       'TELEGRAM_TOKEN',
+      'SUPABASE_URL',
+      'SUPABASE_SERVICE_ROLE_KEY',
+      'SUPABASE_SECRET_KEY',
       'OCR_PROVIDER'
     ];
 
@@ -110,6 +116,35 @@ class HealthCheckService {
       message: 'All required environment variables are set',
       requiredCount: required.length,
       optionalCount: optional.filter(v => process.env[v]).length
+    };
+  }
+
+  /**
+   * Check Supabase Storage image configuration without making a network request.
+   */
+  checkImageStorageConfiguration() {
+    const bucket = process.env.SUPABASE_STORAGE_BUCKET || 'income-expense-images';
+
+    if (!process.env.SUPABASE_URL) {
+      return {
+        status: 'warning',
+        message: 'Supabase URL is not configured; image responses will use text fallback',
+        bucket
+      };
+    }
+
+    if (!isStorageConfigured()) {
+      return {
+        status: 'warning',
+        message: 'Supabase server key is not configured; image responses will use text fallback',
+        bucket
+      };
+    }
+
+    return {
+      status: 'ok',
+      message: 'Supabase Storage image upload is configured',
+      bucket
     };
   }
 
