@@ -8,44 +8,38 @@ const { parsePrivateKey, parseServiceAccountJson } = require('../utils/credentia
  */
 
 function getAuthClient() {
-  try {
-    // ✅ Method 1 (Recommended): Use full JSON from Secret Manager
-    if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
-      try {
-        const credentials = parseServiceAccountJson(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
-        return new JWT({
-          email: credentials.client_email,
-          key: credentials.private_key,
-          scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-        });
-      } catch (e) {
-        console.error('[AUTH] GOOGLE_SERVICE_ACCOUNT_JSON parsing failed:', e.message);
-        // Fall through to method 2
-      }
+  const scopes = ['https://www.googleapis.com/auth/spreadsheets'];
+
+  if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
+    try {
+      const credentials = parseServiceAccountJson(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+      return new JWT({
+        email: credentials.client_email,
+        key: credentials.private_key,
+        scopes,
+      });
+    } catch (error) {
+      console.error('[AUTH] GOOGLE_SERVICE_ACCOUNT_JSON parsing failed:', error.message);
     }
+  }
 
-    // ✅ Method 2: Use separate environment variables
-    const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-    const privateKeyRaw = process.env.GOOGLE_PRIVATE_KEY;
-
-    if (!email || !privateKeyRaw) {
-      throw new Error(
-        '[AUTH] Missing credentials. Provide either GOOGLE_SERVICE_ACCOUNT_JSON or both ' +
-        'GOOGLE_SERVICE_ACCOUNT_EMAIL and GOOGLE_PRIVATE_KEY'
-      );
-    }
-
-    const privateKey = parsePrivateKey(privateKeyRaw);
-
+  const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
+  const privateKeyRaw = process.env.GOOGLE_PRIVATE_KEY;
+  if (email && privateKeyRaw) {
     return new JWT({
       email,
-      key: privateKey,
-      scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+      key: parsePrivateKey(privateKeyRaw),
+      scopes,
     });
-  } catch (error) {
-    console.error('[AUTH] Failed to initialize JWT client:', error.message);
-    throw error;
   }
+
+  if (process.env.K_SERVICE || process.env.GOOGLE_CLOUD_PROJECT) {
+    return new google.auth.GoogleAuth({ scopes });
+  }
+
+  throw new Error(
+    '[AUTH] Missing credentials. Configure GOOGLE_SERVICE_ACCOUNT_JSON, GOOGLE_SERVICE_ACCOUNT_EMAIL/GOOGLE_PRIVATE_KEY, or run on Google Cloud with Application Default Credentials'
+  );
 }
 
 function getBangkokNow() {

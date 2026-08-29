@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict');
 const { renderBalanceChart } = require('../src/services/balanceChart');
 const { buildDialogflowResponse } = require('../src/utils/responseBuilder');
-const { getPublicObjectUrl } = require('../src/services/supabaseStorage');
+const { getPublicObjectUrl } = require('../src/services/cloudStorage');
 
 async function main() {
   const summary = {
@@ -20,14 +20,13 @@ async function main() {
   assert.ok(rendered.buffer.length > 1000, 'rendered image should contain JPEG data');
   assert.equal(rendered.buffer.subarray(0, 2).toString('hex'), 'ffd8', 'buffer should be JPEG');
 
-  const response = buildDialogflowResponse('สรุปยอด', 'https://idxioootfnninrejvspi.supabase.co/storage/v1/object/public/income-expense-images/balance/test.jpg');
+  const response = buildDialogflowResponse('สรุปยอด', 'https://storage.googleapis.com/income-expense-images/balance/test.jpg');
   assert.equal(response.fulfillmentMessages.length, 2);
-  assert.equal(response.fulfillmentMessages[1].image.imageUri.includes('/storage/v1/object/public/'), true);
+  assert.equal(response.fulfillmentMessages[1].image.imageUri.includes('storage.googleapis.com/'), true);
 
-  process.env.SUPABASE_URL = 'https://idxioootfnninrejvspi.supabase.co/rest/v1/';
   assert.equal(
     getPublicObjectUrl('income-expense-images', 'balance/test image.jpg'),
-    'https://idxioootfnninrejvspi.supabase.co/storage/v1/object/public/income-expense-images/balance/test%20image.jpg'
+    'https://storage.googleapis.com/income-expense-images/balance/test%20image.jpg'
   );
 
   console.log('image-response smoke test passed');

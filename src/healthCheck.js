@@ -1,6 +1,6 @@
 const { google } = require('googleapis');
 const { parsePrivateKey, parseServiceAccountJson } = require('./utils/credentialsParser');
-const { isStorageConfigured } = require('./services/supabaseStorage');
+const { isStorageConfigured, getBucketName } = require('./services/cloudStorage');
 
 class HealthCheckService {
   constructor() {
@@ -86,17 +86,16 @@ class HealthCheckService {
    */
   checkEnvironmentVariables() {
     const required = [
-      'GOOGLE_SERVICE_ACCOUNT_EMAIL',
-      'GOOGLE_PRIVATE_KEY',
       'GOOGLE_SPREADSHEET_ID'
     ];
 
     const optional = [
       'OPENAI_API_KEY',
       'TELEGRAM_TOKEN',
-      'SUPABASE_URL',
-      'SUPABASE_SERVICE_ROLE_KEY',
-      'SUPABASE_SECRET_KEY',
+      'GOOGLE_SERVICE_ACCOUNT_EMAIL',
+      'GOOGLE_PRIVATE_KEY',
+      'GOOGLE_SERVICE_ACCOUNT_JSON',
+      'GCS_IMAGE_BUCKET',
       'OCR_PROVIDER'
     ];
 
@@ -119,31 +118,21 @@ class HealthCheckService {
     };
   }
 
-  /**
-   * Check Supabase Storage image configuration without making a network request.
+    /**
+   * Check Google Cloud Storage image configuration without making a network request.
    */
   checkImageStorageConfiguration() {
-    const bucket = process.env.SUPABASE_STORAGE_BUCKET || 'income-expense-images';
-
-    if (!process.env.SUPABASE_URL) {
-      return {
-        status: 'warning',
-        message: 'Supabase URL is not configured; image responses will use text fallback',
-        bucket
-      };
-    }
-
+    const bucket = getBucketName() || 'income-expense-images';
     if (!isStorageConfigured()) {
       return {
         status: 'warning',
-        message: 'Supabase server key is not configured; image responses will use text fallback',
+        message: 'GCS_IMAGE_BUCKET is not configured; image responses will use text fallback',
         bucket
       };
     }
-
     return {
       status: 'ok',
-      message: 'Supabase Storage image upload is configured',
+      message: 'Google Cloud Storage image upload is configured',
       bucket
     };
   }
@@ -165,24 +154,17 @@ class HealthCheckService {
         }
       }
 
-      // Fall back to separate variables
+      // Fall back to separate variables, then Cloud Run Application Default Credentials.
       if (!credentials) {
         const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
         const privateKeyRaw = process.env.GOOGLE_PRIVATE_KEY;
-
-        if (!email || !privateKeyRaw) {
-          return {
-            status: 'error',
-            message: 'Service account credentials not configured'
-          };
+        if (email && privateKeyRaw) {
+          credentials = { client_email: email, private_key: parsePrivateKey(privateKeyRaw) };
         }
-
-        const privateKey = parsePrivateKey(privateKeyRaw);
-        credentials = { client_email: email, private_key: privateKey };
       }
 
       const auth = new google.auth.GoogleAuth({
-        credentials,
+        ...(credentials ? { credentials } : {}),
         scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly']
       });
 
@@ -198,8 +180,12 @@ class HealthCheckService {
 
       return {
         status: 'ok',
-        message: 'Google authentication successful',
-        email: credentials.client_email.substring(0, 5) + '...@' + credentials.client_email.split('@')[1]
+        message: credentials
+          ? 'Google authentication successful'
+          : 'Google Cloud Application Default Credentials authentication successful',
+        ...(credentials?.client_email ? {
+          email: credentials.client_email.substring(0, 5) + '...@' + credentials.client_email.split('@')[1]
+        } : {})
       };
 
     } catch (error) {
@@ -237,12 +223,13 @@ class HealthCheckService {
       if (!credentials) {
         const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
         const privateKeyRaw = process.env.GOOGLE_PRIVATE_KEY;
-        const privateKey = parsePrivateKey(privateKeyRaw);
-        credentials = { client_email: email, private_key: privateKey };
+        if (email && privateKeyRaw) {
+          credentials = { client_email: email, private_key: parsePrivateKey(privateKeyRaw) };
+        }
       }
 
       const auth = new google.auth.GoogleAuth({
-        credentials,
+        ...(credentials ? { credentials } : {}),
         scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly']
       });
 

@@ -5,7 +5,7 @@ const { saveRecord, saveInvestmentRecord, getBalanceSummary } = require("../serv
 const { queryExcelData } = require("../services/excelQueryService");
 const { extractUser, formatUserLabel } = require('../utils/userExtractor');
 const { renderBalanceChart } = require('../services/balanceChart');
-const { isStorageConfigured, uploadPublicObject } = require('../services/supabaseStorage');
+const { isStorageConfigured, uploadPublicObject } = require('../services/cloudStorage');
 const {
   buildDialogflowResponse,
   buildIncomeConfirmation,
@@ -183,7 +183,7 @@ function extractEntity(parameters, keys) {
 
 async function createBalanceChartImage(summary) {
   if (!isStorageConfigured()) {
-    console.warn('[IMAGE] Supabase Storage is not configured; using text fallback');
+    console.warn('[IMAGE] Google Cloud Storage is not configured; using text fallback');
     return null;
   }
 
