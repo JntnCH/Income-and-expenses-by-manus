@@ -20,13 +20,13 @@ async function main() {
   assert.ok(rendered.buffer.length > 1000, 'rendered image should contain JPEG data');
   assert.equal(rendered.buffer.subarray(0, 2).toString('hex'), 'ffd8', 'buffer should be JPEG');
 
-  const response = buildDialogflowResponse('สรุปยอด', 'https://storage.googleapis.com/income-expense-images/balance/test.jpg');
+  const response = buildDialogflowResponse('สรุปยอด', 'https://storage.googleapis.com/income-expenses-by-manus_cloudbuild/balance/test.jpg');
   assert.equal(response.fulfillmentMessages.length, 2);
   assert.equal(response.fulfillmentMessages[1].image.imageUri.includes('storage.googleapis.com/'), true);
 
   assert.equal(
-    getPublicObjectUrl('income-expense-images', 'balance/test image.jpg'),
-    'https://storage.googleapis.com/income-expense-images/balance/test%20image.jpg'
+    getPublicObjectUrl('income-expenses-by-manus_cloudbuild', 'balance/test image.jpg'),
+    'https://storage.googleapis.com/income-expenses-by-manus_cloudbuild/balance/test%20image.jpg'
   );
 
   console.log('image-response smoke test passed');

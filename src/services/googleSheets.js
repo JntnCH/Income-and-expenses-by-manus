@@ -10,6 +10,10 @@ const { parsePrivateKey, parseServiceAccountJson } = require('../utils/credentia
 function getAuthClient() {
   const scopes = ['https://www.googleapis.com/auth/spreadsheets'];
 
+  if (process.env.K_SERVICE) {
+    return new google.auth.GoogleAuth({ scopes });
+  }
+
   if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
     try {
       const credentials = parseServiceAccountJson(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
@@ -33,7 +37,7 @@ function getAuthClient() {
     });
   }
 
-  if (process.env.K_SERVICE || process.env.GOOGLE_CLOUD_PROJECT) {
+  if (process.env.GOOGLE_CLOUD_PROJECT) {
     return new google.auth.GoogleAuth({ scopes });
   }
 

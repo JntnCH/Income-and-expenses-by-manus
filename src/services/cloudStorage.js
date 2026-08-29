@@ -1,6 +1,6 @@
 const { Storage } = require('@google-cloud/storage');
 
-const DEFAULT_BUCKET = 'income-expense-images';
+const DEFAULT_BUCKET = 'income-expenses-by-manus_cloudbuild';
 let storageClient;
 
 function getStorageClient() {
@@ -33,7 +33,7 @@ async function uploadPublicObject(buffer, options = {}) {
   const contentType = options.contentType || 'application/octet-stream';
 
   if (!bucketName) {
-    throw new Error('GCS_IMAGE_BUCKET is not configured');
+    throw new Error(`GCS_IMAGE_BUCKET is not configured; set it to ${DEFAULT_BUCKET}`);
   }
   if (!objectPath) {
     throw new Error('Cloud Storage objectPath is required');

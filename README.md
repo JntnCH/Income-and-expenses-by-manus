@@ -59,7 +59,7 @@ GOOGLE_SPREADSHEET_ID=...
 OPENAI_API_KEY=... # สำหรับ AI Analyst ใน Webhook
 
 # สำหรับสร้างและเก็บภาพสรุปยอดผ่าน Google Cloud Storage บน Cloud Run
-GCS_IMAGE_BUCKET=income-expense-images
+GCS_IMAGE_BUCKET=income-expenses-by-manus_cloudbuild
 ```
 
 ### ขั้นตอนที่ 3 — ติดตั้ง Google Apps Script (แนะนำ)
@@ -88,7 +88,7 @@ GCS_IMAGE_BUCKET=income-expense-images
 
 ### ภาพสรุปยอดสำหรับ Telegram และ LINE
 
-เมื่อเรียก Intent `CheckBalance` หรือ `เช็คยอด` ระบบจะสร้างภาพ JPEG แบบ deterministic ขนาด 240×240 พิกเซล อัปโหลดไปยัง Google Cloud Storage bucket `income-expense-images` แล้วส่ง Dialogflow image response กลับไป ภาพนี้จะถูกแสดงผ่าน Dialogflow integrations ของ Telegram และ LINE เมื่อ Cloud Run service account มีสิทธิ์เขียน bucket และ object URL เปิดให้แพลตฟอร์มปลายทางเข้าถึงได้
+เมื่อเรียก Intent `CheckBalance` หรือ `เช็คยอด` ระบบจะสร้างภาพ JPEG แบบ deterministic ขนาด 240×240 พิกเซล อัปโหลดไปยัง Google Cloud Storage bucket `income-expenses-by-manus_cloudbuild` แล้วส่ง Dialogflow image response กลับไป ภาพนี้จะถูกแสดงผ่าน Dialogflow integrations ของ Telegram และ LINE เมื่อ Cloud Run service account มีสิทธิ์เขียน bucket และ object URL เปิดให้แพลตฟอร์มปลายทางเข้าถึงได้
 
 ห้ามใส่ service-account key ใน frontend, Git repository หรือไฟล์ที่เปิดเผยต่อสาธารณะ หากยังไม่ได้ตั้งค่า bucket หรือสิทธิ์ระบบจะคงตอบกลับเป็นข้อความตามเดิมเพื่อไม่ให้ Webhook ล้มเหลว
 
@@ -99,7 +99,7 @@ GCS_IMAGE_BUCKET=income-expense-images
 
 ## Cloud Run + Google Cloud Storage
 
-เมื่อ deploy ผ่าน `.github/workflows/deploy-google.yaml` ระบบจะสร้างภาพสรุปยอดใน Cloud Run และอัปโหลดไปยัง Google Cloud Storage โดยใช้ Application Default Credentials ของ Cloud Run service account ตัวแปร `GCS_IMAGE_BUCKET` ต้องชี้ไปยัง bucket ที่มีอยู่จริง เช่น `income-expense-images` และ bucket ต้องอนุญาตให้ผู้รับภายนอกอ่าน object ได้ หากต้องการให้ Telegram และ LINE เปิดภาพจาก URL ได้
+เมื่อ deploy ผ่าน `.github/workflows/deploy-google.yaml` ระบบจะสร้างภาพสรุปยอดใน Cloud Run และอัปโหลดไปยัง Google Cloud Storage โดยใช้ Application Default Credentials ของ Cloud Run service account ตัวแปร `GCS_IMAGE_BUCKET` ต้องชี้ไปยัง bucket ที่มีอยู่จริง เช่น `income-expenses-by-manus_cloudbuild` และ bucket ต้องอนุญาตให้ผู้รับภายนอกอ่าน object ได้ หากต้องการให้ Telegram และ LINE เปิดภาพจาก URL ได้
 
 ก่อนใช้งาน Production ให้สร้าง bucket และกำหนดสิทธิ์ให้ Cloud Run runtime service account มีสิทธิ์ `Storage Object Creator` หรือ `Storage Object Admin` ตามความเหมาะสม และกำหนดสิทธิ์อ่าน object ให้เหมาะกับรูปแบบ URL ที่เลือกใช้ URL ปัจจุบันเป็น `https://storage.googleapis.com/<bucket>/<object>` ซึ่งต้องเข้าถึงได้จากอินเทอร์เน็ต
 

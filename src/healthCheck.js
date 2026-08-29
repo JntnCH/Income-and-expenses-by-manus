@@ -122,7 +122,7 @@ class HealthCheckService {
    * Check Google Cloud Storage image configuration without making a network request.
    */
   checkImageStorageConfiguration() {
-    const bucket = getBucketName() || 'income-expense-images';
+    const bucket = getBucketName() || 'income-expenses-by-manus_cloudbuild';
     if (!isStorageConfigured()) {
       return {
         status: 'warning',
@@ -144,7 +144,22 @@ class HealthCheckService {
     try {
       let credentials;
 
-      // Try JSON credentials first
+      if (process.env.K_SERVICE) {
+        const auth = new google.auth.GoogleAuth({
+          scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly']
+        });
+        const client = await auth.getClient();
+        const token = await client.getAccessToken();
+        if (!token || !token.token) {
+          return { status: 'error', message: 'Failed to obtain Cloud Run access token' };
+        }
+        return {
+          status: 'ok',
+          message: 'Google Cloud Application Default Credentials authentication successful'
+        };
+      }
+
+      // Try JSON credentials first for local or legacy deployments.
       if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
         try {
           credentials = parseServiceAccountJson(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
@@ -211,6 +226,20 @@ class HealthCheckService {
       }
 
       let credentials;
+
+      if (process.env.K_SERVICE) {
+        const auth = new google.auth.GoogleAuth({
+          scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly']
+        });
+        const client = await auth.getClient();
+        const sheets = google.sheets({ version: 'v4', auth: client });
+        const response = await sheets.spreadsheets.get({ spreadsheetId });
+        return {
+          status: 'ok',
+          message: `Connected to spreadsheet: "${response.data.properties.title}"`,
+          spreadsheetTitle: response.data.properties.title
+        };
+      }
 
       if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
         try {
