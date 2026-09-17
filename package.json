@@ -6,8 +6,8 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "node src/index.js",
-    "build": "echo 'Build successful'",
-    "lint": "node -e 'console.log(\"Lint passed\")'",
+    "build": "node --check src/index.js",
+    "lint": "node --check src/index.js && node --check src/middleware/security.js",
     "gcp-build": "pip3 install -r requirements.txt"
   },
   "dependencies": {
