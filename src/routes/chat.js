@@ -147,13 +147,6 @@ router.get('/recent', (req, res) => {
   res.json({ success: true, transactions });
 });
 
-/**
- * POST /api/chat/reset
- * ล้างข้อมูลจำลอง
- */
-router.post('/reset', (req, res) => {
-  const result = resetLedger();
-  res.json(result);
-});
+
 
 module.exports = router;

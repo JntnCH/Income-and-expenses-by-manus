@@ -250,7 +250,18 @@ router.post('/dialogflow', async (req, res) => {
       }
 
       default: {
-        responseText = `ขออภัยค่ะ ฉันได้รับ Intent "${intentName}" แต่ยังไม่ได้ตั้งค่าการทำงานใน Webhook`;
+        // Fallback or unhandled intents
+        // ตรวจสอบว่าเป็นคำสั่งจัดการ Entity (เช่น /entity) หรือไม่
+        if (queryText && (queryText.toLowerCase().startsWith('/entity') || queryText.toLowerCase().startsWith('/หมวดหมู่'))) {
+          try {
+            const chatResult = await chatService.processChatMessage(queryText, { req, recorder: recorderLabel, platform: userInfo.platform });
+            responseText = chatResult.text;
+          } catch (err) {
+            responseText = `❌ ข้อผิดพลาดคำสั่ง Entity: ${err.message}`;
+          }
+        } else {
+          responseText = `ขออภัยค่ะ ฉันได้รับ Intent "${intentName}" แต่ยังไม่ได้ตั้งค่าการทำงานใน Webhook`;
+        }
       }
     }
 

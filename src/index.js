@@ -6,7 +6,6 @@ const rateLimit = require("express-rate-limit");
 const path = require("path");
 const { google } = require('googleapis');
 const healthCheckService = require('./healthCheck');
-const { requireAdmin, requireWebhookSecret } = require('./middleware/security');
 
 const dialogflowRoutes = require("./routes/dialogflow");
 const ocrRoutes = require("./routes/ocr");
@@ -14,119 +13,281 @@ const { router: imageCardRoutes } = require("./routes/imageCard");
 const categoriesRoutes = require("./routes/categories");
 const chatRoutes = require("./routes/chat");
 const telegramRoutes = require("./routes/telegram");
+const fs = require("fs");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const isProduction = process.env.NODE_ENV === 'production';
 
+// Trust reverse proxy headers (e.g., Cloud Run / Nginx)
 app.set("trust proxy", 1);
 
-const allowedOrigins = (process.env.CORS_ORIGINS || '').split(',').map(v => v.trim()).filter(Boolean);
-app.use(helmet({ contentSecurityPolicy: isProduction ? undefined : false }));
+// ============================================================
+// Middleware
+// ============================================================
+app.use(helmet({
+  contentSecurityPolicy: process.env.NODE_ENV === 'production' ? true : false,
+}));
 app.use(cors({
-  origin: allowedOrigins.length ? allowedOrigins : (isProduction ? [] : true),
-  methods: ['GET', 'POST', 'OPTIONS'],
+  origin: process.env.NODE_ENV === 'production' 
+    ? [
+        process.env.FRONTEND_URL || 'https://income-expense-docker-274212739997.asia-southeast3.run.app',
+        'https://income-and-expenses-by-manus.vercel.app' // อนุญาตโดเมนเดิมเผื่อไว้
+      ]
+    : '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
   credentials: true
 }));
-app.use(express.json({ limit: "1mb" }));
-app.use(express.urlencoded({ extended: true, limit: "1mb" }));
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use(express.static(path.join(__dirname, "../public")));
 
+// Rate Limiting — ป้องกัน abuse
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
+  windowMs: 15 * 60 * 1000, // 15 นาที
   max: 100,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: "Too many requests, please try again later." }
+  message: { error: "Too many requests, please try again later." },
+  validate: { xForwardedForHeader: false }
 });
-const webhookLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 60, standardHeaders: true, legacyHeaders: false });
 app.use("/api/", limiter);
-app.use("/webhook/", webhookLimiter);
 
-// Administrative and diagnostic endpoints must never be public.
-app.get("/admin", requireAdmin, (req, res) => res.sendFile(path.join(__dirname, "../public/admin.html")));
-app.get("/debug-auth", requireAdmin, (req, res) => res.sendFile(path.join(__dirname, "../public/admin.html")));
+// ============================================================
+// Admin Security Middleware
+// ============================================================
+function requireAdmin(req, res, next) {
+  // Use authorization header or query parameter for admin token
+  const token = req.headers.authorization?.replace('Bearer ', '') || req.query.token;
+  const adminToken = process.env.ADMIN_API_KEY;
+  
+  // In development without a key set, allow access
+  if (process.env.NODE_ENV !== 'production' && !adminToken) {
+    return next();
+  }
+
+  if (!token || token !== adminToken) {
+    return res.status(401).json({ error: 'Unauthorized. Admin access required.' });
+  }
+
+  next();
+}
+
+// ============================================================
+// Debug Routes
+// ============================================================
+
+// 1. หน้า UI สำหรับ Admin & Debug
+app.get("/admin", requireAdmin, (req, res) => {
+  res.sendFile(path.join(__dirname, "../public/admin.html"));
+});
+
+app.get("/debug-auth", requireAdmin, (req, res) => {
+  res.sendFile(path.join(__dirname, "../public/admin.html"));
+});
+
+// 2. API สำหรับดึง Config ปัจจุบัน
 app.get("/api/admin/config", requireAdmin, (req, res) => {
-  res.json({
+  const config = {
     GOOGLE_SERVICE_ACCOUNT_EMAIL: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || "",
     GOOGLE_SPREADSHEET_ID: process.env.GOOGLE_SPREADSHEET_ID || "",
     OCR_PROVIDER: process.env.OCR_PROVIDER || "tesseract",
     OPENAI_API_KEY: process.env.OPENAI_API_KEY ? "********" : "",
     GEMINI_API_KEY: process.env.GEMINI_API_KEY ? "********" : ""
-  });
+  };
+  res.json(config);
 });
+
+// 3. API สำหรับบันทึก Config (Runtime Update)
 app.post("/api/admin/config", requireAdmin, (req, res) => {
-  const allowedKeys = new Set(['GOOGLE_SPREADSHEET_ID', 'GOOGLE_SHEET_NAME', 'GOOGLE_INVESTMENT_SHEET_NAME', 'OCR_PROVIDER']);
-  for (const [key, value] of Object.entries(req.body || {})) {
-    if (allowedKeys.has(key) && typeof value === 'string' && value.length <= 200) process.env[key] = value;
-  }
+  const newConfig = req.body;
+  Object.keys(newConfig).forEach(key => {
+    if (newConfig[key] && !newConfig[key].includes('***')) {
+      process.env[key] = newConfig[key];
+    }
+  });
+  console.log("[ADMIN] Configuration updated in runtime");
   res.json({ success: true, message: "Runtime config updated" });
 });
+
+// 4. API สำหรับส่งข้อมูล Debug (เรียกจากหน้า HTML)
 app.get("/api/debug-auth-data", requireAdmin, async (req, res) => {
-  const logs = [];
+  let logs = [];
+  const addLog = (title, message, status = 'success', detail = null) => 
+    logs.push({ title, message, status, detail });
+
   const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
   const privateKey = process.env.GOOGLE_PRIVATE_KEY;
   const spreadsheetId = process.env.GOOGLE_SPREADSHEET_ID;
-  if (!email) logs.push({ title: 'Service Account Email', message: 'Missing', status: 'error' });
-  else logs.push({ title: 'Service Account Email', message: `${email.substring(0, 5)}...${email.substring(email.indexOf('@'))}`, status: 'success' });
-  if (!privateKey) logs.push({ title: 'Private Key', message: 'Missing', status: 'error' });
-  else logs.push({ title: 'Private Key', message: privateKey.includes('BEGIN PRIVATE KEY') ? 'Format appears valid' : 'Invalid format', status: privateKey.includes('BEGIN PRIVATE KEY') ? 'success' : 'error' });
+
+  // Check Email
+  if (!email) addLog("Service Account Email", "ไม่พบ Email ใน .env", "error");
+  else addLog("Service Account Email", `${email.substring(0, 5)}...${email.substring(email.indexOf('@'))}`, "success");
+
+  // Check Private Key
+  if (!privateKey) addLog("Private Key", "ไม่พบ Private Key ใน .env", "error");
+  else if (!privateKey.includes('BEGIN PRIVATE KEY')) addLog("Private Key", "รูปแบบคีย์ไม่ถูกต้อง (ขาด Header)", "error");
+  else addLog("Private Key", "รูปแบบเบื้องต้นถูกต้อง", "success");
+
   try {
-    const auth = new google.auth.GoogleAuth({ credentials: { client_email: email, private_key: privateKey ? privateKey.replace(/\\n/g, '\n') : '' }, scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'] });
-    const client = await auth.getClient();
+    const auth = new google.auth.GoogleAuth({
+      credentials: {
+        client_email: email,
+        private_key: privateKey ? privateKey.replace(/\\n/g, '\n') : ""
+      },
+      scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
+    });
+
+    const authClient = await auth.getClient();
+    addLog("Authentication Status", "ล็อกอินเข้า Google สำเร็จ!", "success");
+
     if (spreadsheetId) {
-      const result = await google.sheets({ version: 'v4', auth: client }).spreadsheets.get({ spreadsheetId });
-      logs.push({ title: 'Spreadsheet Access', message: `Connected to "${result.data.properties.title}"`, status: 'success' });
-    } else logs.push({ title: 'Spreadsheet Access', message: 'Spreadsheet ID missing', status: 'warning' });
+      const sheets = google.sheets({ version: 'v4', auth: authClient });
+      const response = await sheets.spreadsheets.get({ spreadsheetId });
+      addLog("Spreadsheet Access", `เชื่อมต่อไฟล์ "${response.data.properties.title}" สำเร็จ`, "success");
+    } else {
+      addLog("Spreadsheet Access", "ไม่ได้ระบุ GOOGLE_SPREADSHEET_ID", "warning");
+    }
   } catch (error) {
-    console.error('[ADMIN DEBUG]', error.message);
-    logs.push({ title: 'Authentication', message: 'Connection failed', status: 'error' });
+    let detail = error.message;
+    if (error.response && error.response.data) {
+      detail = JSON.stringify(error.response.data, null, 2);
+    }
+    addLog("Error Details", "การเชื่อมต่อล้มเหลว", "error", detail);
   }
+
   res.json({ logs });
 });
 
-app.use("/webhook", requireWebhookSecret, dialogflowRoutes);
-app.use("/webhook", telegramRoutes);
-app.use("/telegram", telegramRoutes);
+// ============================================================
+// Routes
+// ============================================================
+app.use("/webhook", dialogflowRoutes);
+app.use("/webhook", telegramRoutes); // POST /webhook/telegram
+app.use("/telegram", telegramRoutes); // POST /telegram/webhook & /telegram
 app.use("/api/ocr", ocrRoutes);
 app.use("/api/card", imageCardRoutes);
 app.use("/api/categories", categoriesRoutes);
-// Reset is an administrative operation; protect only that route while keeping chat public.
-app.use("/api/chat", (req, res, next) => req.path === '/reset' ? requireAdmin(req, res, next) : next(), chatRoutes);
+app.use("/api/chat", chatRoutes);
 app.use("/api/telegram", telegramRoutes);
-app.get("/chat", (req, res) => res.sendFile(path.join(__dirname, "../public/admin.html")));
 
-app.get("/health", (req, res) => res.status(200).json(healthCheckService.getBasicHealth()));
-app.get("/health/live", (req, res) => res.status(200).json({ status: 'alive', timestamp: new Date().toISOString() }));
+app.get("/chat", (req, res) => {
+  res.sendFile(path.join(__dirname, "../public/admin.html"));
+});
+
+// ============================================================
+// Health Check Endpoints
+// ============================================================
+
+/**
+ * GET /health - Basic health check (for Docker HEALTHCHECK)
+ * Returns 200 if server is running
+ * Response time: <50ms
+ */
+app.get("/health", (req, res) => {
+  const health = healthCheckService.getBasicHealth();
+  res.status(200).json(health);
+});
+
+/**
+ * GET /health/ready - Readiness check (for Kubernetes/Cloud Run readiness probe)
+ * Returns 200 only if all critical dependencies are OK
+ * Response time: <2000ms (includes Google API calls with caching)
+ */
 app.get("/health/ready", async (req, res) => {
   try {
     const health = await healthCheckService.getReadinessHealth();
-    res.status(health.status === 'ready' ? 200 : 503).json(health);
+    
+    // Determine HTTP status code based on checks
+    const hasErrors = Object.values(health.checks).some(c => c.status === 'error');
+    const statusCode = hasErrors ? 503 : 200;
+    
+    // If not ready, return 503 (Service Unavailable)
+    if (health.status !== 'ready') {
+      return res.status(503).json(health);
+    }
+    
+    res.status(statusCode).json(health);
   } catch (error) {
-    console.error('[HealthCheck]', error.message);
-    res.status(503).json({ status: 'not-ready', error: 'Readiness check failed' });
+    console.error('[HealthCheck] Readiness check error:', error);
+    res.status(503).json({
+      status: 'not-ready',
+      error: 'Failed to perform readiness check',
+      message: error.message
+    });
   }
 });
+
+/**
+ * GET /health/startup - Startup check (for deployment verification)
+ * Returns full diagnostic information
+ * Response time: <2000ms
+ */
 app.get("/health/startup", async (req, res) => {
   try {
     const health = await healthCheckService.getStartupHealth();
-    const hasErrors = Object.values(health.checks || {}).some(c => c.status === 'error');
-    res.status(hasErrors ? 503 : 200).json(health);
+    
+    // Determine HTTP status code
+    const hasErrors = Object.values(health.checks).some(c => c.status === 'error');
+    const statusCode = hasErrors ? 503 : 200;
+    
+    res.status(statusCode).json(health);
   } catch (error) {
-    console.error('[HealthCheck]', error.message);
-    res.status(503).json({ status: 'error', type: 'startup', error: 'Startup check failed' });
+    console.error('[HealthCheck] Startup check error:', error);
+    res.status(503).json({
+      status: 'error',
+      type: 'startup',
+      error: 'Failed to perform startup check',
+      message: error.message
+    });
   }
 });
 
-app.get("/", (req, res) => {
-  if (req.accepts('html')) return res.sendFile(path.join(__dirname, "../public/admin.html"));
-  res.json({ name: "Income & Expense Dialogflow Webhook", version: "2.1.0" });
+/**
+ * GET /health/live - Liveness check (for Kubernetes/Cloud Run liveness probe)
+ * Minimal check to ensure container should be restarted if this fails
+ */
+app.get("/health/live", (req, res) => {
+  // Just verify the process is alive
+  res.status(200).json({
+    status: 'alive',
+    timestamp: new Date().toISOString()
+  });
 });
+
+// Root Route - Serve admin UI for browser, JSON for API clients
+app.get("/", (req, res) => {
+  if (req.accepts('html')) {
+    return res.sendFile(path.join(__dirname, "../public/admin.html"));
+  }
+  res.json({
+    name: "Income & Expense Dialogflow Webhook",
+    version: "2.1.0",
+    endpoints: {
+      admin: "GET /admin",
+      webhook: "POST /webhook/dialogflow",
+      ocr_scan: "POST /api/ocr/scan",
+      card_render: "GET /api/card/render",
+      debug_auth: "GET /debug-auth",
+      health: "GET /health",
+      "health_ready": "GET /health/ready",
+      "health_startup": "GET /health/startup",
+      "health_live": "GET /health/live"
+    }
+  });
+});
+
+// 404 & Error Handlers
 app.use((req, res) => res.status(404).json({ error: "Endpoint not found" }));
 app.use((err, req, res, next) => {
   console.error("[ERROR]", err.message);
-  res.status(err.statusCode || 500).json({ error: err.statusCode ? err.message : "Internal server error" });
+  res.status(500).json({ error: "Internal server error", detail: err.message });
 });
 
-app.listen(PORT, "0.0.0.0", () => console.log(`✅ Server running on port ${PORT}`));
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`✅ Server running on http://0.0.0.0:${PORT}`);
+  console.log(`📊 Health check endpoints available:`);
+  console.log(`   - GET /health (basic)`);
+  console.log(`   - GET /health/ready (readiness probe)`);
+  console.log(`   - GET /health/startup (startup probe)`);
+  console.log(`   - GET /health/live (liveness probe)`);
+});
+
 module.exports = app;

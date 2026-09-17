@@ -10,6 +10,7 @@ const { resolveCategory } = require('./categoryManager');
 const { saveRecord, getBalanceSummary, saveInvestmentRecord } = require('./googleSheets');
 const { cacheCardPayload } = require('../routes/imageCard');
 const { queryExcelData } = require('./excelQueryService');
+const dialogflowEntityService = require('./dialogflowEntityService');
 
 const LEDGER_FILE = path.join(__dirname, '../../data/chat_ledger.json');
 
@@ -295,6 +296,74 @@ async function processChatMessage(message, options = {}) {
   }
 
   const lower = rawText.toLowerCase();
+
+  // 0. Entity Management Commands (เชื่อมต่อกับ Dialogflow Entities)
+  if (lower.startsWith('/entity') || lower.startsWith('/หมวดหมู่')) {
+    try {
+      const parts = rawText.split(/\s+/);
+      const command = parts[1]?.toLowerCase();
+      
+      if (!command || command === 'list') {
+        const types = await dialogflowEntityService.listEntityTypes();
+        const typeList = types.map(t => `- **${t.displayName}** (${t.entitiesCount} รายการ)`).join('\n');
+        return {
+          success: true,
+          text: `📋 **รายการ Entity Types ใน Dialogflow:**\n\n${typeList || 'ไม่พบ Entity Type'}\n\n💡 คำสั่งเพิ่มเติม:\n• \`/entity get [ชื่อType]\`\n• \`/entity add [ชื่อType] [ค่าหลัก] [คำพ้อง1,คำพ้อง2,...]\`\n• \`/entity del [ชื่อType] [ค่าหลัก]\``,
+          quickReplies: ['/entity list', '/entity get Expense-category']
+        };
+      }
+      
+      if (command === 'get') {
+        const typeName = parts[2];
+        if (!typeName) throw new Error('กรุณาระบุชื่อ Entity Type เช่น `/entity get Expense-category`');
+        const entityType = await dialogflowEntityService.getEntityType(typeName);
+        const entities = (entityType.entities || []).map(e => `• **${e.value}** (คำค้นหา: ${e.synonyms.join(', ')})`).join('\n');
+        return {
+          success: true,
+          text: `🏷️ **หมวดหมู่ใน [${entityType.displayName}]:**\n\n${entities || 'ไม่มีข้อมูลหมวดหมู่'}`,
+        };
+      }
+      
+      if (command === 'add' || command === 'set') {
+        const typeName = parts[2];
+        const value = parts[3];
+        const synonymsRaw = parts.slice(4).join(' ');
+        if (!typeName || !value) throw new Error('รูปแบบไม่ถูกต้อง ใช้ `/entity add [ชื่อType] [ค่าหลัก] [คำพ้อง1,คำพ้อง2,...]` หรือ `/entity set ...`');
+        const synonyms = synonymsRaw ? synonymsRaw.split(',').map(s => s.trim()) : [];
+        
+        let result;
+        if (command === 'set') {
+           result = await dialogflowEntityService.setEntityEntry(typeName, value, synonyms);
+        } else {
+           result = await dialogflowEntityService.addOrUpdateEntityEntry(typeName, value, synonyms);
+        }
+        
+        return {
+          success: true,
+          text: `✅ **${command === 'set' ? 'ตั้งค่า (แทนที่)' : 'เพิ่ม/อัปเดต'}หมวดหมู่สำเร็จ**\n\n• Type: ${result.entityType}\n• ค่า: ${result.value}\n• คำค้นหา: ${result.synonyms.join(', ')}`,
+        };
+      }
+      
+      if (command === 'del' || command === 'delete' || command === 'remove') {
+        const typeName = parts[2];
+        const value = parts.slice(3).join(' ');
+        if (!typeName || !value) throw new Error('รูปแบบไม่ถูกต้อง ใช้ `/entity del [ชื่อType] [ค่าหลัก]`');
+        const result = await dialogflowEntityService.deleteEntityEntry(typeName, value);
+        return {
+          success: true,
+          text: result.success ? `✅ ${result.message}` : `❌ ${result.message}`,
+        };
+      }
+      
+      throw new Error(`ไม่รู้จักคำสั่ง "${command}"`);
+      
+    } catch (err) {
+      return {
+        success: false,
+        text: `❌ **ข้อผิดพลาด (Dialogflow Entity):**\n${err.message}`
+      };
+    }
+  }
 
   // 1. ตรวจจับคำทักทาย / วิธีใช้ (Help & Greeting)
   if (

@@ -253,6 +253,50 @@ async function addOrUpdateEntityEntry(displayNameOrFullName, value, synonyms = [
 }
 
 /**
+ * แทนที่คำพ้องความหมาย (Synonyms) ของหมวดหมู่ (Entity Entry) ใหม่ทั้งหมด
+ */
+async function setEntityEntry(displayNameOrFullName, value, synonyms = []) {
+  const entityType = await getEntityType(displayNameOrFullName);
+  const currentEntities = entityType.entities || [];
+
+  const cleanSynonyms = Array.from(new Set([
+    value,
+    ...synonyms.map(s => String(s).trim()).filter(Boolean)
+  ]));
+
+  const existingIndex = currentEntities.findIndex(
+    e => e.value.toLowerCase() === value.toLowerCase()
+  );
+
+  if (existingIndex >= 0) {
+    // แทนที่ synonyms เดิมด้วยใหม่ทั้งหมด
+    currentEntities[existingIndex].synonyms = cleanSynonyms;
+  } else {
+    // เพิ่ม entity ใหม่ถ้าไม่มี
+    currentEntities.push({
+      value,
+      synonyms: cleanSynonyms
+    });
+  }
+
+  const dialogflow = getDialogflow();
+  const response = await dialogflow.projects.agent.entityTypes.patch({
+    name: entityType.name,
+    updateMask: 'entities',
+    requestBody: {
+      entities: currentEntities
+    }
+  });
+
+  return {
+    success: true,
+    entityType: response.data.displayName,
+    value,
+    synonyms: cleanSynonyms
+  };
+}
+
+/**
  * ลบหมวดหมู่ (Entity Entry) ออกจาก Entity Type
  */
 async function deleteEntityEntry(displayNameOrFullName, value) {
@@ -323,6 +367,7 @@ module.exports = {
   getEntityType,
   createEntityType,
   addOrUpdateEntityEntry,
+  setEntityEntry,
   deleteEntityEntry,
   pushCategoriesToDialogflow
 };
