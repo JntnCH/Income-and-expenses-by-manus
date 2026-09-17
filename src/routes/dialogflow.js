@@ -1,11 +1,12 @@
 const express = require('express');
-const { randomUUID } = require('crypto');
 const router = express.Router();
 const { saveRecord, saveInvestmentRecord, getBalanceSummary } = require("../services/googleSheets");
 const { queryExcelData } = require("../services/excelQueryService");
 const { extractUser, formatUserLabel } = require('../utils/userExtractor');
-const { renderBalanceChart } = require('../services/balanceChart');
-const { isStorageConfigured, uploadPublicObject } = require('../services/cloudStorage');
+const { cacheCardPayload } = require('./imageCard');
+const { resolveCategory } = require('../services/categoryManager');
+const { rememberProjectIdFromSession } = require('../services/dialogflowEntityService');
+const chatService = require('../services/chatService');
 const {
   buildDialogflowResponse,
   buildIncomeConfirmation,
@@ -17,18 +18,24 @@ const {
 
 /**
  * POST /webhook/dialogflow
- * รับ Webhook จาก Dialogflow และประมวลผลตาม Intent
+ * รับ Webhook จาก Dialogflow และประมวลผลตาม Intent พร้อมตอบกลับด้วยข้อความและรูปภาพการ์ด
  */
 router.post('/dialogflow', async (req, res) => {
   try {
     const body = req.body;
     const intentName = body?.queryResult?.intent?.displayName;
     const parameters = body?.queryResult?.parameters || {};
+    const queryText = body?.queryResult?.queryText || '';
+
+    // บันทึก project ID จาก session ของ Dialogflow (ถ้ามี)
+    if (body?.session) {
+      rememberProjectIdFromSession(body.session);
+    }
 
     const userInfo = extractUser(body);
     const recorderLabel = formatUserLabel(userInfo);
 
-    console.log(`[DIALOGFLOW] Intent: ${intentName}`);
+    console.log(`[DIALOGFLOW] Intent: ${intentName} | Query: "${queryText}"`);
     console.log(`[DIALOGFLOW] Parameters:`, JSON.stringify(parameters));
 
     // ============================================================
@@ -41,56 +48,144 @@ router.post('/dialogflow', async (req, res) => {
     const expenseCategory = extractEntity(parameters, ['Expense-category', 'expense-category']);
     
     // ดึงค่า Account (เช่น กสิกร, เงินสด, SCB)
-    const account = extractEntity(parameters, ['account', 'Account', 'bank']);
+    const account = extractEntity(parameters, ['account', 'Account', 'bank']) || 'เงินสด';
 
     // ดึงชื่อรายการ (item)
-    const item = parameters.item || 
-                 parameters.Income_categoryoriginal || 
-                 parameters['Expense-categoryoriginal'] || 
-                 incomeCategory || 
-                 expenseCategory || 
-                 'ไม่ระบุ';
+    let item = parameters.item || 
+               parameters.Income_categoryoriginal || 
+               parameters['Expense-categoryoriginal'] || 
+               incomeCategory || 
+               expenseCategory || 
+               'ไม่ระบุ';
 
     let responseText = '';
-    let imageUri = null;
+    let imageUrl = null;
 
     switch (intentName) {
       case 'บันทึกรายรับ': {
-        const category = incomeCategory || 'รายได้ทั่วไป';
-        await saveRecord({
+        // แก้ไขหมวดหมู่เวลาบันทึกข้อมูลไม่ตรง (Resolve & Normalize Category)
+        const resolution = resolveCategory({
           item,
+          category: incomeCategory,
           type: 'รายรับ',
-          amount,
-          category,
-          account, // ส่งค่า Account ไปด้วย
-          platform: userInfo.platform,
-          recorder: recorderLabel
+          queryText
         });
+        const category = resolution.resolvedCategory;
+        if (item === 'ไม่ระบุ' && resolution.matchedKeyword) {
+          item = resolution.matchedKeyword;
+        }
+
+        console.log(`[CATEGORY RESOLVED] รายรับ | Raw: "${incomeCategory}" -> Final: "${category}" (${resolution.method})`);
+
+        try {
+          await saveRecord({
+            item,
+            type: 'รายรับ',
+            amount,
+            category,
+            account,
+            platform: userInfo.platform,
+            recorder: recorderLabel
+          });
+        } catch (sheetErr) {
+          console.warn('[SHEETS WARN] Saving to local chat ledger:', sheetErr.message);
+          chatService.recordTransaction({
+            type: 'รายรับ',
+            item,
+            amount,
+            category,
+            account,
+            platform: userInfo.platform,
+            recorder: recorderLabel
+          });
+        }
         responseText = buildIncomeConfirmation(item, amount, category, account);
+        try {
+          imageUrl = cacheCardPayload('transaction', {
+            type: 'รายรับ',
+            item,
+            amount,
+            category,
+            account,
+            recorder: recorderLabel,
+            platform: userInfo.platform
+          }, req);
+        } catch (e) {
+          console.warn('[CARD WARN]', e.message);
+        }
         break;
       }
 
       case 'บันทึกรายจ่าย': {
-        const category = expenseCategory || 'ทั่วไป';
-        await saveRecord({
+        // แก้ไขหมวดหมู่เวลาบันทึกข้อมูลไม่ตรง (Resolve & Normalize Category)
+        const resolution = resolveCategory({
           item,
+          category: expenseCategory,
           type: 'รายจ่าย',
-          amount,
-          category,
-          account, // ส่งค่า Account ไปด้วย
-          platform: userInfo.platform,
-          recorder: recorderLabel
+          queryText
         });
+        const category = resolution.resolvedCategory;
+        if (item === 'ไม่ระบุ' && resolution.matchedKeyword) {
+          item = resolution.matchedKeyword;
+        }
+
+        console.log(`[CATEGORY RESOLVED] รายจ่าย | Raw: "${expenseCategory}" -> Final: "${category}" (${resolution.method})`);
+
+        try {
+          await saveRecord({
+            item,
+            type: 'รายจ่าย',
+            amount,
+            category,
+            account,
+            platform: userInfo.platform,
+            recorder: recorderLabel
+          });
+        } catch (sheetErr) {
+          console.warn('[SHEETS WARN] Saving to local chat ledger:', sheetErr.message);
+          chatService.recordTransaction({
+            type: 'รายจ่าย',
+            item,
+            amount,
+            category,
+            account,
+            platform: userInfo.platform,
+            recorder: recorderLabel
+          });
+        }
         responseText = buildExpenseConfirmation(item, amount, category, account);
+        try {
+          imageUrl = cacheCardPayload('transaction', {
+            type: 'รายจ่าย',
+            item,
+            amount,
+            category,
+            account,
+            recorder: recorderLabel,
+            platform: userInfo.platform
+          }, req);
+        } catch (e) {
+          console.warn('[CARD WARN]', e.message);
+        }
         break;
       }
 
       case 'เช็คยอด':
       case 'CheckBalance': {
         try {
-          const summary = await getBalanceSummary();
+          let summary;
+          try {
+            summary = await getBalanceSummary();
+          } catch (sheetErr) {
+            console.warn('[SHEETS WARN] Fetching balance from local ledger:', sheetErr.message);
+            summary = chatService.getBalanceSummary();
+          }
           responseText = buildBalanceSummary(summary);
-          imageUri = await createBalanceChartImage(summary);
+          try {
+            imageUrl = cacheCardPayload('balance', summary, req);
+          } catch (e) {
+            console.warn('[CARD WARN]', e.message);
+          }
         } catch (err) {
           console.error('[BALANCE ERROR]', err.message);
           responseText = `❌ ไม่สามารถดึงยอดคงเหลือได้: ${err.message}`;
@@ -123,6 +218,19 @@ router.post('/dialogflow', async (req, res) => {
         } else {
           responseText = buildSellInvestmentConfirmation(assetName, assetType, quantity, pricePerUnit, totalAmount);
         }
+
+        try {
+          imageUrl = cacheCardPayload('investment', {
+            action,
+            assetType,
+            assetName,
+            quantity,
+            pricePerUnit,
+            totalAmount
+          }, req);
+        } catch (e) {
+          console.warn('[CARD WARN]', e.message);
+        }
         break;
       }
 
@@ -146,7 +254,7 @@ router.post('/dialogflow', async (req, res) => {
       }
     }
 
-    return res.json(buildDialogflowResponse(responseText, imageUri));
+    return res.json(buildDialogflowResponse(responseText, imageUrl));
 
   } catch (error) {
     console.error('[DIALOGFLOW ERROR]', error.message);
@@ -179,30 +287,6 @@ function extractEntity(parameters, keys) {
     if (typeof val === 'string') return val;
   }
   return null;
-}
-
-async function createBalanceChartImage(summary) {
-  if (!isStorageConfigured()) {
-    console.warn('[IMAGE] Google Cloud Storage is not configured; using text fallback');
-    return null;
-  }
-
-  try {
-    const rendered = await renderBalanceChart(summary);
-    const now = new Date();
-    const dateKey = now.toISOString().slice(0, 10);
-    const objectPath = `balance/${dateKey}/${randomUUID()}.jpg`;
-    const upload = await uploadPublicObject(rendered.buffer, {
-      objectPath,
-      contentType: rendered.contentType
-    });
-
-    console.log('[IMAGE] Balance chart uploaded:', upload.objectPath);
-    return upload.url;
-  } catch (error) {
-    console.error('[IMAGE] Balance chart generation/upload failed:', error.message);
-    return null;
-  }
 }
 
 module.exports = router;

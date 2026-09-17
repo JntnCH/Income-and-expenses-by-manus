@@ -9,10 +9,17 @@ const healthCheckService = require('./healthCheck');
 
 const dialogflowRoutes = require("./routes/dialogflow");
 const ocrRoutes = require("./routes/ocr");
+const { router: imageCardRoutes } = require("./routes/imageCard");
+const categoriesRoutes = require("./routes/categories");
+const chatRoutes = require("./routes/chat");
+const telegramRoutes = require("./routes/telegram");
 const fs = require("fs");
 
 const app = express();
-const PORT = process.env.PORT || 8080;
+const PORT = process.env.PORT || 3000;
+
+// Trust reverse proxy headers (e.g., Cloud Run / Nginx)
+app.set("trust proxy", 1);
 
 // ============================================================
 // Middleware
@@ -29,7 +36,8 @@ app.use(express.static(path.join(__dirname, "../public")));
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 นาที
   max: 100,
-  message: { error: "Too many requests, please try again later." }
+  message: { error: "Too many requests, please try again later." },
+  validate: { xForwardedForHeader: false }
 });
 app.use("/api/", limiter);
 
@@ -123,7 +131,17 @@ app.get("/api/debug-auth-data", async (req, res) => {
 // Routes
 // ============================================================
 app.use("/webhook", dialogflowRoutes);
+app.use("/webhook", telegramRoutes); // POST /webhook/telegram
+app.use("/telegram", telegramRoutes); // POST /telegram/webhook & /telegram
 app.use("/api/ocr", ocrRoutes);
+app.use("/api/card", imageCardRoutes);
+app.use("/api/categories", categoriesRoutes);
+app.use("/api/chat", chatRoutes);
+app.use("/api/telegram", telegramRoutes);
+
+app.get("/chat", (req, res) => {
+  res.sendFile(path.join(__dirname, "../public/admin.html"));
+});
 
 // ============================================================
 // Health Check Endpoints
@@ -205,13 +223,19 @@ app.get("/health/live", (req, res) => {
   });
 });
 
-// Root Route
+// Root Route - Serve admin UI for browser, JSON for API clients
 app.get("/", (req, res) => {
+  if (req.accepts('html')) {
+    return res.sendFile(path.join(__dirname, "../public/admin.html"));
+  }
   res.json({
     name: "Income & Expense Dialogflow Webhook",
     version: "2.1.0",
     endpoints: {
+      admin: "GET /admin",
       webhook: "POST /webhook/dialogflow",
+      ocr_scan: "POST /api/ocr/scan",
+      card_render: "GET /api/card/render",
       debug_auth: "GET /debug-auth",
       health: "GET /health",
       "health_ready": "GET /health/ready",
@@ -228,8 +252,8 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: "Internal server error", detail: err.message });
 });
 
-app.listen(PORT, () => {
-  console.log(`✅ Server running on port ${PORT}`);
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`✅ Server running on http://0.0.0.0:${PORT}`);
   console.log(`📊 Health check endpoints available:`);
   console.log(`   - GET /health (basic)`);
   console.log(`   - GET /health/ready (readiness probe)`);

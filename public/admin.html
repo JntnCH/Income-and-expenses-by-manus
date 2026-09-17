@@ -3,28 +3,735 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DevMus Admin - System Configuration</title>
+    <title>Income & Expense Dialogflow Webhook</title>
+    <meta name="description" content="ระบบบันทึกรายรับ-รายจ่ายผ่าน Telegram Bot และ Dialogflow Webhook พร้อม OCR สแกนสลิปและการ์ดสรุปยอด">
+    <meta property="og:title" content="Income & Expense Dialogflow Webhook">
+    <meta property="og:description" content="ระบบบันทึกรายรับ-รายจ่ายผ่าน Telegram Bot และ Dialogflow Webhook พร้อม OCR สแกนสลิปและการ์ดสรุปยอด">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        body { background-color: #f8f9fa; font-family: 'Sarabun', sans-serif; }
-        .card { border: none; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); margin-bottom: 20px; }
+        body { background-color: #f1f5f9; font-family: 'Sarabun', -apple-system, sans-serif; color: #1e293b; }
+        .card { border: none; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.04); margin-bottom: 20px; }
         .status-badge { font-size: 0.8rem; padding: 5px 10px; border-radius: 20px; }
         .nav-link.active { font-weight: bold; border-bottom: 3px solid #0d6efd; }
         pre { background: #f1f1f1; padding: 10px; border-radius: 5px; font-size: 0.85rem; }
+
+        /* Modern Chat Styles */
+        .chat-card {
+            border: none;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+            background: #ffffff;
+            overflow: hidden;
+        }
+        .chat-header {
+            background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
+            color: #ffffff;
+            padding: 16px 24px;
+        }
+        .chat-scroll {
+            height: 540px;
+            max-height: 65vh;
+            overflow-y: auto;
+            padding: 20px;
+            background: #f8fafc;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            scroll-behavior: smooth;
+        }
+        .chat-scroll::-webkit-scrollbar {
+            width: 6px;
+        }
+        .chat-scroll::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 10px;
+        }
+        .message-row {
+            display: flex;
+            align-items: flex-end;
+            gap: 10px;
+            width: 100%;
+        }
+        .message-row.user {
+            justify-content: flex-end;
+        }
+        .message-avatar {
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+            flex-shrink: 0;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+        }
+        .message-avatar.bot {
+            background: #ffffff;
+            color: #2563eb;
+            border: 2px solid #dbeafe;
+        }
+        .message-avatar.user {
+            background: #2563eb;
+            color: #ffffff;
+        }
+        .message-bubble {
+            max-width: 82%;
+            padding: 14px 18px;
+            border-radius: 18px;
+            font-size: 0.95rem;
+            line-height: 1.55;
+            word-break: break-word;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+            position: relative;
+        }
+        .message-row.bot .message-bubble {
+            background: #ffffff;
+            color: #1e293b;
+            border: 1px solid #e2e8f0;
+            border-bottom-left-radius: 4px;
+        }
+        .message-row.user .message-bubble {
+            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+            color: #ffffff;
+            border-bottom-right-radius: 4px;
+        }
+        .message-time {
+            font-size: 0.72rem;
+            opacity: 0.75;
+            margin-top: 6px;
+            display: block;
+        }
+        .chat-card-img {
+            max-width: 100%;
+            width: 320px;
+            border-radius: 12px;
+            margin-top: 10px;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            transition: transform 0.2s ease;
+            border: 1px solid #e2e8f0;
+        }
+        .chat-card-img:hover {
+            transform: scale(1.02);
+        }
+        .quick-chips-bar {
+            display: flex;
+            gap: 8px;
+            overflow-x: auto;
+            padding: 12px 20px;
+            background: #f1f5f9;
+            border-top: 1px solid #e2e8f0;
+            border-bottom: 1px solid #e2e8f0;
+            white-space: nowrap;
+        }
+        .quick-chip {
+            background: #ffffff;
+            color: #334155;
+            border: 1px solid #cbd5e1;
+            border-radius: 20px;
+            padding: 6px 14px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .quick-chip:hover {
+            background: #2563eb;
+            color: #ffffff;
+            border-color: #2563eb;
+            transform: translateY(-1px);
+        }
+        .chat-input-area {
+            background: #ffffff;
+            padding: 16px 20px;
+        }
+        .chat-input-box {
+            border: 2px solid #e2e8f0;
+            border-radius: 28px;
+            padding: 8px 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: #ffffff;
+            transition: border-color 0.2s ease;
+        }
+        .chat-input-box:focus-within {
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+        }
+        .chat-input-box input {
+            border: none;
+            outline: none;
+            width: 100%;
+            font-size: 0.95rem;
+            background: transparent;
+        }
+        .chat-icon-btn {
+            background: none;
+            border: none;
+            color: #64748b;
+            font-size: 1.25rem;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            flex-shrink: 0;
+        }
+        .chat-icon-btn:hover {
+            background: #f1f5f9;
+            color: #2563eb;
+        }
+        .btn-send {
+            background: #2563eb;
+            color: #ffffff;
+            border: none;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            flex-shrink: 0;
+        }
+        .btn-send:hover {
+            background: #1d4ed8;
+            transform: scale(1.05);
+        }
+        .btn-send:disabled {
+            background: #cbd5e1;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .typing-bubble {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 10px 16px;
+        }
+        .typing-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: #94a3b8;
+            animation: bounce 1.4s infinite ease-in-out both;
+        }
+        .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+        .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+        @keyframes bounce {
+            0%, 80%, 100% { transform: scale(0); }
+            40% { transform: scale(1); }
+        }
+        .mic-active {
+            color: #ef4444 !important;
+            background: #fee2e2 !important;
+            animation: pulse-red 1.5s infinite;
+        }
+        @keyframes pulse-red {
+            0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+            70% { transform: scale(1.1); box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+            100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+        .drag-over-overlay {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(37, 99, 235, 0.88);
+            color: #ffffff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border-radius: 20px;
+            z-index: 50;
+            font-size: 1.2rem;
+            font-weight: bold;
+        }
+
+        /* Telegram Styles */
+        .telegram-header {
+            background: linear-gradient(135deg, #0088cc 0%, #0284c7 100%);
+            color: #ffffff;
+            border-radius: 18px;
+            padding: 24px;
+        }
+        .telegram-mock-phone {
+            background: #0f172a;
+            border-radius: 28px;
+            padding: 12px;
+            box-shadow: 0 16px 36px rgba(15, 23, 42, 0.18);
+            max-width: 440px;
+            margin: 0 auto;
+        }
+        .telegram-mock-screen {
+            background: #f8fafc;
+            border-radius: 18px;
+            height: 480px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            border: 1px solid #e2e8f0;
+        }
+        .tg-bubble {
+            background: #ffffff;
+            padding: 10px 14px;
+            border-radius: 14px 14px 14px 3px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+            font-size: 0.88rem;
+            max-width: 90%;
+            margin-bottom: 10px;
+            line-height: 1.45;
+            border: 1px solid #f1f5f9;
+        }
+        .tg-bubble.user {
+            background: #e0f2fe;
+            border-radius: 14px 14px 3px 14px;
+            align-self: flex-end;
+            margin-left: auto;
+            border-color: #bae6fd;
+            color: #0369a1;
+        }
+        .tg-btn-chip {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 6px 12px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            font-weight: 500;
+            color: #0284c7;
+            transition: all 0.15s ease;
+            text-align: center;
+        }
+        .tg-btn-chip:hover {
+            background: #e0f2fe;
+            border-color: #38bdf8;
+        }
     </style>
 </head>
 <body>
-    <nav class="navbar navbar-dark bg-primary mb-4">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4 shadow-sm">
         <div class="container">
-            <span class="navbar-brand mb-0 h1"><i class="bi bi-robot"></i> DevMus Admin Dashboard</span>
-            <div class="d-flex">
-                <span id="system-status" class="badge bg-light text-dark">Checking system...</span>
+            <span class="navbar-brand mb-0 h1 d-flex align-items-center">
+                <i class="bi bi-robot fs-3 me-2"></i>
+                <div>
+                    <div class="fw-bold" style="letter-spacing: -0.5px;">DevMus Financial Bot</div>
+                    <div class="small opacity-75" style="font-size: 0.75rem;">ระบบบันทึกรายรับ-รายจ่ายผ่านแชท &amp; สแกนสลิป</div>
+                </div>
+            </span>
+
+            <div class="d-flex align-items-center gap-2">
+                <div class="btn-group me-2" role="group" id="mainViewSwitcher">
+                    <button type="button" class="btn btn-light fw-bold" id="btnNavChat" onclick="switchMainView('chat')">
+                        <i class="bi bi-chat-dots-fill text-primary"></i> ใช้งานผ่านแชท
+                    </button>
+                    <button type="button" class="btn btn-outline-light" id="btnNavTelegram" onclick="switchMainView('telegram')">
+                        <i class="bi bi-telegram text-info"></i> Telegram Bot
+                    </button>
+                    <button type="button" class="btn btn-outline-light" id="btnNavAdmin" onclick="switchMainView('admin')">
+                        <i class="bi bi-sliders2"></i> จัดการระบบ
+                    </button>
+                </div>
+                <span id="system-status" class="badge bg-light text-dark py-2 px-3">Checking...</span>
             </div>
         </div>
     </nav>
 
-    <div class="container">
+    <!-- ============================================================ -->
+    <!-- VIEW: CHAT INTERFACE (โหมดใช้งานผ่านแชท) -->
+    <!-- ============================================================ -->
+    <div id="view-chat" class="container mb-4">
+        <div class="row justify-content-center">
+            <div class="col-lg-10 col-xl-9">
+                <div class="card chat-card position-relative" id="chatCardBox">
+                    <!-- Drag & Drop Overlay -->
+                    <div id="dragDropOverlay" class="drag-over-overlay d-none">
+                        <i class="bi bi-cloud-arrow-up-fill fs-1 mb-2"></i>
+                        <span>วางภาพสลิปหรือใบเสร็จที่นี่เพื่อสแกน</span>
+                    </div>
+
+                    <!-- Chat Header -->
+                    <div class="chat-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="message-avatar bot" style="width: 44px; height: 44px; font-size: 1.3rem;">
+                                <i class="bi bi-robot"></i>
+                            </div>
+                            <div>
+                                <div class="fw-bold fs-6 d-flex align-items-center gap-2">
+                                    DevMus Assistant
+                                    <span class="badge bg-success rounded-pill" style="font-size: 0.68rem; font-weight: normal;">
+                                        <i class="bi bi-circle-fill me-1" style="font-size: 0.55rem;"></i>ออนไลน์
+                                    </span>
+                                </div>
+                                <div class="small opacity-75" style="font-size: 0.8rem;">
+                                    พิมพ์เพื่อบันทึก รายรับ, รายจ่าย, หรือส่งรูปสลิป
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="d-flex align-items-center gap-2">
+                            <button class="btn btn-sm btn-outline-light rounded-pill" onclick="switchMainView('telegram')" title="ใช้งานผ่าน Telegram Bot">
+                                <i class="bi bi-telegram text-info me-1"></i> Telegram Bot
+                            </button>
+                            <button class="btn btn-sm btn-light fw-medium rounded-pill text-primary" onclick="openBalanceModal()" title="ดูสรุปยอดบัญชี">
+                                <i class="bi bi-pie-chart-fill me-1"></i> สรุปยอดเงิน
+                            </button>
+                            <button class="btn btn-sm btn-outline-light rounded-pill" onclick="openRecentModal()" title="ดูประวัติรายการบันทึกล่าสุด">
+                                <i class="bi bi-clock-history me-1"></i> ประวัติ
+                            </button>
+                            <button class="btn btn-sm btn-outline-light rounded-pill" onclick="clearChatHistory()" title="ล้างประวัติการแชท">
+                                <i class="bi bi-trash3"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Chat Scroll Messages -->
+                    <div class="chat-scroll" id="chatMessages">
+                        <!-- Initial Bot Welcome Message -->
+                        <div class="message-row bot">
+                            <div class="message-avatar bot"><i class="bi bi-robot"></i></div>
+                            <div class="message-bubble">
+                                <div class="fw-bold mb-1 text-primary">👋 สวัสดีค่ะ! ยินดีต้อนรับสู่ระบบบันทึกรายรับ-รายจ่าย</div>
+                                <div>คุณสามารถพิมพ์คุยภาษาธรรมชาติเพื่อบันทึกบัญชีได้ทันที เช่น:</div>
+                                <ul class="mb-2 mt-1 ps-3 small text-muted">
+                                    <li><strong>รายจ่าย:</strong> <em>"กินข้าวมันไก่ 50"</em>, <em>"ซื้อของ 150"</em>, <em>"เติมน้ำมัน 800 กสิกร"</em></li>
+                                    <li><strong>รายรับ:</strong> <em>"เงินเดือนเข้า 35,000"</em>, <em>"ขายของได้ 1,200"</em></li>
+                                    <li><strong>ตรวจยอด:</strong> <em>"เช็คยอด"</em> หรือ <em>"เหลือเงินเท่าไหร่"</em></li>
+                                    <li><strong>สแกนสลิป:</strong> กดปุ่มกล้องถ่ายรูป 📷 หรือลากรูปสลิปมาวางได้เลยค่ะ</li>
+                                </ul>
+                                <span class="message-time">เริ่มต้นใช้งาน</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Typing Indicator -->
+                    <div id="chatTypingIndicator" class="px-4 py-2 d-none" style="background: #f8fafc;">
+                        <div class="message-row bot mb-0">
+                            <div class="message-avatar bot" style="width: 30px; height: 30px; font-size: 0.9rem;"><i class="bi bi-robot"></i></div>
+                            <div class="message-bubble typing-bubble">
+                                <div class="typing-dot"></div>
+                                <div class="typing-dot"></div>
+                                <div class="typing-dot"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Quick Suggestion Chips -->
+                    <div class="quick-chips-bar" id="quickChipsBar">
+                        <button class="quick-chip" onclick="sendQuickMessage('กินข้าว 60 บาท')">
+                            🍜 กินข้าว 60 บาท
+                        </button>
+                        <button class="quick-chip" onclick="sendQuickMessage('กาแฟอเมซอน 65')">
+                            ☕ กาแฟ 65
+                        </button>
+                        <button class="quick-chip" onclick="sendQuickMessage('เติมน้ำมัน 800 กสิกร')">
+                            ⛽ เติมน้ำมัน 800 กสิกร
+                        </button>
+                        <button class="quick-chip" onclick="sendQuickMessage('ซื้อของเซเว่น 150')">
+                            🏪 ซื้อของ 150
+                        </button>
+                        <button class="quick-chip" onclick="sendQuickMessage('เงินเดือนเข้า 35,000')">
+                            💰 เงินเดือนเข้า 35,000
+                        </button>
+                        <button class="quick-chip" onclick="sendQuickMessage('เช็คยอดคงเหลือ')">
+                            📊 เช็คยอดคงเหลือ
+                        </button>
+                        <button class="quick-chip" onclick="sendQuickMessage('ซื้อทอง 1 บาท 42000')">
+                            🪙 ซื้อทอง 42,000
+                        </button>
+                        <button class="quick-chip" onclick="triggerSlipFileInput()">
+                            📷 สแกนสลิป/ใบเสร็จ
+                        </button>
+                    </div>
+
+                    <!-- Selected Attachment Banner -->
+                    <div id="attachmentPreviewBanner" class="p-2 px-3 bg-light border-top d-none align-items-center justify-content-between">
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="bi bi-image text-primary fs-5"></i>
+                            <span id="attachmentFileName" class="small fw-medium text-truncate" style="max-width: 260px;">slip.jpg</span>
+                            <span class="badge bg-primary rounded-pill">พร้อมสแกน OCR</span>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-outline-secondary rounded-circle" onclick="cancelAttachment()" style="width: 28px; height: 28px; padding: 0;">
+                            <i class="bi bi-x"></i>
+                        </button>
+                    </div>
+
+                    <!-- Chat Input Form -->
+                    <div class="chat-input-area border-top">
+                        <form id="chatForm" onsubmit="handleChatSubmit(event)" class="m-0">
+                            <!-- Hidden File Input for Slip OCR -->
+                            <input type="file" id="slipFileInput" accept="image/*" class="d-none" onchange="handleSlipFileSelect(event)">
+
+                            <div class="chat-input-box">
+                                <button type="button" class="chat-icon-btn" onclick="triggerSlipFileInput()" title="แนบภาพสลิปหรือใบเสร็จ">
+                                    <i class="bi bi-camera-fill"></i>
+                                </button>
+                                <button type="button" class="chat-icon-btn" id="btnMic" onclick="toggleSpeechRecognition()" title="พิมพ์ด้วยเสียง (พูดภาษาไทย)">
+                                    <i class="bi bi-mic-fill"></i>
+                                </button>
+                                <input type="text" id="chatInputText" autocomplete="off" placeholder="พิมพ์รายการ เช่น กินข้าว 60, เติมน้ำมัน 800 กสิกร, เช็คยอด...">
+                                <button type="submit" class="btn-send" id="btnSendChat" title="ส่งข้อความ">
+                                    <i class="bi bi-send-fill" style="margin-left: 2px;"></i>
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- VIEW: TELEGRAM BOT (โหมดใช้งานผ่าน Telegram Bot) -->
+    <!-- ============================================================ -->
+    <div id="view-telegram" class="container mb-5 d-none">
+        <!-- Top Telegram Banner -->
+        <div class="card telegram-header mb-4 shadow-sm border-0">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+                <div class="d-flex align-items-center gap-3">
+                    <div style="width: 58px; height: 58px; background: rgba(255,255,255,0.22); border-radius: 16px; display: flex; align-items: center; justify-content: center; font-size: 2rem;">
+                        <i class="bi bi-telegram text-white"></i>
+                    </div>
+                    <div>
+                        <h4 class="mb-1 fw-bold text-white d-flex align-items-center gap-2">
+                            Telegram Bot Assistant
+                            <span id="tg-status-pill" class="badge bg-warning text-dark rounded-pill fs-6 fw-normal">กำลังตรวจสอบ...</span>
+                        </h4>
+                        <div class="text-white opacity-90 small">
+                            บันทึกรายรับ-รายจ่าย, สแกนสลิปโอนเงิน (OCR), และเช็คยอดคงเหลือผ่านแอป Telegram ได้ทุกที่ทุกเวลา
+                        </div>
+                    </div>
+                </div>
+                <div class="d-flex gap-2 flex-wrap">
+                    <a id="btnOpenTelegramDirect" href="#" target="_blank" class="btn btn-light fw-bold text-primary rounded-pill px-4 shadow-sm d-none">
+                        <i class="bi bi-send-fill me-1"></i> เปิดแชทใน Telegram
+                    </a>
+                    <button class="btn btn-outline-light rounded-pill px-3" onclick="checkTelegramStatus(true)">
+                        <i class="bi bi-arrow-clockwise"></i> รีเฟรชสถานะ
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-4">
+            <!-- Left Column: Bot Status, Webhook & Setup Form -->
+            <div class="col-lg-6">
+                <!-- Bot Status Details -->
+                <div class="card p-4 mb-4">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5 class="fw-bold mb-0 text-dark">
+                            <i class="bi bi-info-circle text-primary me-2"></i>ข้อมูลบอท &amp; Webhook
+                        </h5>
+                        <span id="tg-connection-badge" class="badge bg-secondary">กำลังเชื่อมต่อ...</span>
+                    </div>
+
+                    <div id="tg-bot-details" class="bg-light p-3 rounded-3 mb-3 border">
+                        <div class="d-flex justify-content-between py-1 border-bottom">
+                            <span class="text-muted">ชื่อบอท (Bot Name):</span>
+                            <span id="tg-bot-name" class="fw-semibold text-dark">-</span>
+                        </div>
+                        <div class="d-flex justify-content-between py-1 border-bottom">
+                            <span class="text-muted">Username (@):</span>
+                            <span id="tg-bot-username" class="fw-bold text-primary">-</span>
+                        </div>
+                        <div class="d-flex justify-content-between py-1 border-bottom">
+                            <span class="text-muted">Token (Masked):</span>
+                            <span id="tg-bot-token-masked" class="font-monospace text-muted small">-</span>
+                        </div>
+                        <div class="d-flex justify-content-between py-1">
+                            <span class="text-muted">สถานะ Webhook:</span>
+                            <span id="tg-webhook-state" class="fw-medium text-dark">-</span>
+                        </div>
+                    </div>
+
+                    <!-- Webhook Actions -->
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold small text-muted">Telegram Webhook URL ของระบบนี้</label>
+                        <div class="input-group">
+                            <input type="text" id="tgDetectedWebhookUrl" class="form-control font-monospace small bg-white" readonly>
+                            <button class="btn btn-outline-secondary" type="button" onclick="copyTelegramWebhookUrl()" title="คัดลอก URL">
+                                <i class="bi bi-clipboard"></i>
+                            </button>
+                        </div>
+                        <div class="form-text small">Endpoint ที่จะส่งข้อความจาก Telegram Server ตรงมายังระบบหลังบ้าน</div>
+                    </div>
+
+                    <div class="d-flex gap-2 flex-wrap mb-2">
+                        <button type="button" class="btn btn-primary fw-bold" onclick="autoRegisterTelegramWebhook()">
+                            <i class="bi bi-lightning-charge-fill me-1"></i> ผูก Webhook อัตโนมัติ (1-Click Setup)
+                        </button>
+                        <button type="button" class="btn btn-outline-danger" onclick="deleteTelegramWebhook()">
+                            <i class="bi bi-x-circle me-1"></i> ปลด Webhook
+                        </button>
+                    </div>
+                    <div id="tg-webhook-alert" class="alert d-none mt-2 py-2 small mb-0"></div>
+                </div>
+
+                <!-- Token & Chat ID Configuration Form -->
+                <div class="card p-4 mb-4">
+                    <h5 class="fw-bold mb-3 text-dark">
+                        <i class="bi bi-key-fill text-warning me-2"></i>ตั้งค่า Token &amp; Chat ID
+                    </h5>
+                    <form id="formTelegramConfig" onsubmit="saveTelegramSettings(event)">
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Telegram Bot Token (จาก @BotFather)</label>
+                            <div class="input-group">
+                                <input type="password" id="tgInputToken" class="form-control font-monospace" placeholder="เช่น 7123456789:AAFx...">
+                                <button class="btn btn-outline-secondary" type="button" onclick="toggleTokenVisibility()">
+                                    <i class="bi bi-eye" id="tgTokenEyeIcon"></i>
+                                </button>
+                            </div>
+                            <div class="form-text small">สามารถระบุในตัวแปร <code>TELEGRAM_BOT_TOKEN</code> หรือบันทึกผ่านฟอร์มนี้ได้เลย</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Default Chat ID (สำหรับรับข้อความแจ้งเตือน/ทดสอบ)</label>
+                            <input type="text" id="tgInputChatId" class="form-control font-monospace" placeholder="เช่น 123456789 หรือ -100123456789">
+                            <div class="form-text small">ดู Chat ID ของตัวเองได้ง่ายๆ โดยทักหา <code>@userinfobot</code> ใน Telegram</div>
+                        </div>
+
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-success fw-bold" id="btnSaveTelegramConfig">
+                                <i class="bi bi-check2-circle me-1"></i> บันทึกการเชื่อมต่อ
+                            </button>
+                            <button type="button" class="btn btn-outline-primary" onclick="sendTelegramTestMessage()">
+                                <i class="bi bi-bell-fill me-1"></i> ทดสอบส่งข้อความ
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- 4-Step Setup Guide -->
+                <div class="card p-4 bg-light border">
+                    <h6 class="fw-bold text-dark mb-3"><i class="bi bi-journal-check text-primary me-2"></i>ขั้นตอนสร้างและเชื่อมต่อบอท 4 สเต็ปง่ายๆ</h6>
+                    <ol class="small text-muted mb-0 ps-3">
+                        <li class="mb-2">เปิดแอป Telegram แล้วค้นหาบัญชี <strong>@BotFather</strong> (มีเครื่องหมายถูกสีฟ้า)</li>
+                        <li class="mb-2">พิมพ์ <code>/newbot</code> แล้วทำตามคำแนะนำ โดยตั้งชื่อบอท และตั้ง username ให้ลงท้ายด้วย <code>bot</code> เช่น <code>my_expense_bot</code></li>
+                        <li class="mb-2">@BotFather จะส่ง <strong>HTTP API token</strong> มาให้ ให้คัดลอกมาวางในช่อง Token ด้านบน แล้วกด <strong>"บันทึกการเชื่อมต่อ"</strong></li>
+                        <li>กดปุ่ม <strong>"ผูก Webhook อัตโนมัติ (1-Click Setup)"</strong> เพื่อให้ Telegram ส่งข้อความตรงมายังระบบนี้ จากนั้นกด <strong>"เปิดแชทใน Telegram"</strong> แล้วเริ่มพิมพ์ใช้งานได้ทันที!</li>
+                    </ol>
+                </div>
+            </div>
+
+            <!-- Right Column: Interactive Telegram Simulator & Commands Guide -->
+            <div class="col-lg-6">
+                <!-- Simulator Card -->
+                <div class="card p-4 mb-4">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5 class="fw-bold mb-0 text-dark">
+                            <i class="bi bi-phone text-info me-2"></i>ทดสอบการทำงานบอท (Live Simulator)
+                        </h5>
+                        <span class="badge bg-info text-white rounded-pill">ทดสอบได้ทันที</span>
+                    </div>
+                    <p class="small text-muted mb-3">
+                        คลิกปุ่มคำสั่งลัด หรือพิมพ์ข้อความด้านล่าง เพื่อจำลองการตอบกลับของ Telegram Bot ทั้งข้อความและการ์ดรูปภาพ:
+                    </p>
+
+                    <!-- Quick Command Chips for Simulator -->
+                    <div class="d-flex gap-1 flex-wrap mb-3">
+                        <button type="button" class="tg-btn-chip" onclick="simulateTelegramMessage('/start')">👋 /start</button>
+                        <button type="button" class="tg-btn-chip" onclick="simulateTelegramMessage('กินข้าว 60')">🍜 กินข้าว 60</button>
+                        <button type="button" class="tg-btn-chip" onclick="simulateTelegramMessage('กาแฟ 65 กสิกร')">☕ กาแฟ 65 กสิกร</button>
+                        <button type="button" class="tg-btn-chip" onclick="simulateTelegramMessage('เติมน้ำมัน 800 SCB')">⛽ เติมน้ำมัน 800</button>
+                        <button type="button" class="tg-btn-chip" onclick="simulateTelegramMessage('เงินเดือนเข้า 35000')">💰 เงินเดือนเข้า 35,000</button>
+                        <button type="button" class="tg-btn-chip" onclick="simulateTelegramMessage('/balance')">📊 /balance</button>
+                        <button type="button" class="tg-btn-chip" onclick="simulateTelegramMessage('/recent')">🕒 /recent</button>
+                        <button type="button" class="tg-btn-chip" onclick="simulateTelegramMessage('/bills')">📑 /bills</button>
+                    </div>
+
+                    <!-- Smartphone Mockup -->
+                    <div class="telegram-mock-phone">
+                        <!-- Top Bar -->
+                        <div class="d-flex align-items-center justify-content-between text-white px-2 py-1 mb-2 small">
+                            <div class="d-flex align-items-center gap-2">
+                                <i class="bi bi-arrow-left"></i>
+                                <div style="width: 28px; height: 28px; border-radius: 50%; background: #0284c7; display: flex; align-items: center; justify-content: center;">
+                                    <i class="bi bi-robot text-white" style="font-size: 0.8rem;"></i>
+                                </div>
+                                <div>
+                                    <div class="fw-bold" style="font-size: 0.8rem;" id="simTopBotName">DevMus Assistant</div>
+                                    <div class="text-white-50" style="font-size: 0.65rem;">bot</div>
+                                </div>
+                            </div>
+                            <div><i class="bi bi-three-dots-vertical"></i></div>
+                        </div>
+
+                        <!-- Chat Messages Screen -->
+                        <div class="telegram-mock-screen p-3" id="tgMockMessages" style="overflow-y: auto;">
+                            <!-- Default Greeting in Telegram -->
+                            <div class="tg-bubble">
+                                <div class="fw-bold text-primary mb-1">🤖 DevMus Assistant</div>
+                                <div>👋 สวัสดีครับ! บันทึกรายรับ-รายจ่ายผ่าน Telegram ได้ง่ายๆ เพียงพิมพ์รายการหรือส่งรูปสลิปเข้ามาได้เลยครับ</div>
+                                <div class="text-muted small text-end mt-1" style="font-size: 0.65rem;">10:00 AM</div>
+                            </div>
+                        </div>
+
+                        <!-- Chat Input Box -->
+                        <div class="mt-2 pt-1">
+                            <form onsubmit="handleSimulatorSubmit(event)" class="d-flex gap-2">
+                                <input type="text" id="tgSimInput" class="form-control form-control-sm rounded-pill border-0 px-3" placeholder="พิมพ์ข้อความทดสอบ...">
+                                <button type="submit" class="btn btn-sm btn-info text-white rounded-circle" style="width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;">
+                                    <i class="bi bi-send-fill" style="font-size: 0.8rem;"></i>
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Command Reference Guide -->
+                <div class="card p-4">
+                    <h5 class="fw-bold mb-3 text-dark">
+                        <i class="bi bi-card-checklist text-success me-2"></i>คำสั่งและการใช้งานบน Telegram
+                    </h5>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-borderless align-middle small mb-0">
+                            <tbody>
+                                <tr class="border-bottom">
+                                    <td class="fw-bold text-primary py-2" style="width: 35%;">🍜 บันทึกรายจ่าย</td>
+                                    <td class="text-muted py-2">พิมพ์ <code>กินข้าว 60</code>, <code>กาแฟ 65 กสิกร</code>, <code>ซื้อของเซเว่น 180</code></td>
+                                </tr>
+                                <tr class="border-bottom">
+                                    <td class="fw-bold text-success py-2">💰 บันทึกรายรับ</td>
+                                    <td class="text-muted py-2">พิมพ์ <code>เงินเดือนเข้า 35,000</code>, <code>ขายของได้ 1,200 พร้อมเพย์</code></td>
+                                </tr>
+                                <tr class="border-bottom">
+                                    <td class="fw-bold text-warning py-2">📷 สแกนสลิป (OCR)</td>
+                                    <td class="text-muted py-2">ส่งรูปภาพสลิปโอนเงินเข้าห้องแชท Telegram ระบบจะสแกนยอดเงินและธนาคารอัตโนมัติ</td>
+                                </tr>
+                                <tr class="border-bottom">
+                                    <td class="fw-bold text-info py-2">📊 เช็คยอดคงเหลือ</td>
+                                    <td class="text-muted py-2">พิมพ์ <code>เช็คยอด</code> หรือคำสั่ง <code>/balance</code> ระบบจะส่งสรุปพร้อมรูปการ์ดบัญชี</td>
+                                </tr>
+                                <tr class="border-bottom">
+                                    <td class="fw-bold text-secondary py-2">🕒 ดูประวัติรายการ</td>
+                                    <td class="text-muted py-2">พิมพ์ <code>ประวัติ</code> หรือคำสั่ง <code>/recent</code> ดู 10 รายการล่าสุด</td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-bold text-danger py-2">📑 แจ้งเตือนบิล</td>
+                                    <td class="text-muted py-2">คำสั่ง <code>/bills</code> ตรวจสอบบิลประจำเดือน พร้อมปุ่มกด <code>[✅ จ่ายแล้ว]</code> ติ๊กบันทึกลงชีต</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- VIEW: ADMIN CONFIGURATION (โหมดจัดการระบบ) -->
+    <!-- ============================================================ -->
+    <div id="view-admin" class="container d-none">
         <div class="row">
             <!-- Sidebar / Info -->
             <div class="col-md-4">
@@ -33,8 +740,16 @@
                     <hr>
                     <div id="config-status-list">
                         <div class="d-flex justify-content-between mb-2">
+                            <span><i class="bi bi-telegram text-info me-1"></i> Telegram Bot</span>
+                            <span id="status-telegram" class="status-badge bg-secondary text-white">Pending</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-2">
                             <span>Google Sheets</span>
                             <span id="status-sheets" class="status-badge bg-secondary text-white">Pending</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-2">
+                            <span>Dialogflow API</span>
+                            <span id="status-dialogflow" class="status-badge bg-secondary text-white">Pending</span>
                         </div>
                         <div class="d-flex justify-content-between mb-2">
                             <span>OCR Provider</span>
@@ -64,7 +779,13 @@
                             <a class="nav-link active" href="#" data-tab="basic">พื้นฐาน & Google</a>
                         </li>
                         <li class="nav-item">
+                            <a class="nav-link" href="#" data-tab="categories"><i class="bi bi-tags"></i> หมวดหมู่ & Entities</a>
+                        </li>
+                        <li class="nav-item">
                             <a class="nav-link" href="#" data-tab="ocr">OCR & AI</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="#" data-tab="test">ทดสอบ Webhook & OCR</a>
                         </li>
                         <li class="nav-item">
                             <a class="nav-link" href="#" data-tab="debug">Logs & Debug</a>
@@ -87,6 +808,163 @@
                                 <label class="form-label">Main Spreadsheet ID</label>
                                 <input type="text" class="form-control" name="GOOGLE_SPREADSHEET_ID" placeholder="ID จาก URL ของ Google Sheets">
                             </div>
+                            <div class="mb-3">
+                                <label class="form-label">Dialogflow Project ID (สำหรับเชื่อมต่อ Entity API)</label>
+                                <input type="text" class="form-control" name="DIALOGFLOW_PROJECT_ID" placeholder="เช่น my-agent-project-id (เว้นว่างไว้หากใช้โปรเจกต์เดียวกันกับ Service Account)">
+                                <div class="form-text">ระบบจะดึงอัตโนมัติจาก Service Account หรือ Session ของ Dialogflow Webhook</div>
+                            </div>
+                        </div>
+
+                        <!-- Categories & Dialogflow Entities Config -->
+                        <div id="tab-categories" class="tab-content d-none">
+                            <!-- Top Dialogflow Status & Sync Banner -->
+                            <div class="card bg-light border p-3 mb-3">
+                                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+                                    <div>
+                                        <h6 class="mb-1 text-primary fw-bold"><i class="bi bi-cloud-arrow-down"></i> เชื่อมต่อ Dialogflow Entity Types</h6>
+                                        <div class="small text-muted">
+                                            Project ID: <span id="df-project-id-badge" class="badge bg-secondary">กำลังตรวจสอบ...</span>
+                                            &nbsp;|&nbsp; สถานะ: <span id="df-status-badge" class="badge bg-secondary">Pending</span>
+                                        </div>
+                                    </div>
+                                    <div class="d-flex gap-2 flex-wrap">
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="openDfEntityTypesModal()">
+                                            <i class="bi bi-list-columns-reverse"></i> ดู Entity Types
+                                        </button>
+                                        <div class="btn-group btn-group-sm">
+                                            <button type="button" class="btn btn-sm btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown">
+                                                <i class="bi bi-cloud-download"></i> ดึงจาก Dialogflow
+                                            </button>
+                                            <ul class="dropdown-menu">
+                                                <li><a class="dropdown-item" href="#" onclick="syncFromDialogflow('Expense-category', 'expense')">ดึงหมวดหมู่รายจ่าย (@Expense-category)</a></li>
+                                                <li><a class="dropdown-item" href="#" onclick="syncFromDialogflow('Income_category', 'income')">ดึงหมวดหมู่รายรับ (@Income_category)</a></li>
+                                            </ul>
+                                        </div>
+                                        <div class="btn-group btn-group-sm">
+                                            <button type="button" class="btn btn-sm btn-outline-success dropdown-toggle" data-bs-toggle="dropdown">
+                                                <i class="bi bi-cloud-upload"></i> ส่งขึ้น Dialogflow
+                                            </button>
+                                            <ul class="dropdown-menu">
+                                                <li><a class="dropdown-item" href="#" onclick="syncToDialogflow('Expense-category', 'expense')">ส่งหมวดหมู่รายจ่ายขึ้น Dialogflow</a></li>
+                                                <li><a class="dropdown-item" href="#" onclick="syncToDialogflow('Income_category', 'income')">ส่งหมวดหมู่รายรับขึ้น Dialogflow</a></li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div id="df-sync-alert" class="small alert alert-info py-1 px-2 mb-0 d-none"></div>
+                            </div>
+
+                            <!-- Category Type Switcher & Add Button -->
+                            <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                                <div class="btn-group btn-group-sm" role="group">
+                                    <input type="radio" class="btn-check" name="catTypeFilter" id="catFilterExpense" value="expense" checked onchange="renderCategoryList()">
+                                    <label class="btn btn-outline-danger" for="catFilterExpense"><i class="bi bi-dash-circle"></i> หมวดหมู่รายจ่าย (<span id="expense-count">0</span>)</label>
+                                    <input type="radio" class="btn-check" name="catTypeFilter" id="catFilterIncome" value="income" onchange="renderCategoryList()">
+                                    <label class="btn btn-outline-success" for="catFilterIncome"><i class="bi bi-plus-circle"></i> หมวดหมู่รายรับ (<span id="income-count">0</span>)</label>
+                                </div>
+                                <button type="button" class="btn btn-sm btn-primary" onclick="openAddCategoryModal()">
+                                    <i class="bi bi-plus-lg"></i> เพิ่มหมวดหมู่ใหม่
+                                </button>
+                            </div>
+
+                            <!-- Category Search -->
+                            <div class="input-group input-group-sm mb-3">
+                                <span class="input-group-text"><i class="bi bi-search"></i></span>
+                                <input type="text" id="categorySearchInput" class="form-control" placeholder="ค้นหาหมวดหมู่ หรือคำพ้อง เช่น ชาบู, ค่าไฟ, เงินเดือน..." oninput="renderCategoryList()">
+                            </div>
+
+                            <!-- Category List Table -->
+                            <div class="table-responsive mb-4" style="max-height: 360px; overflow-y: auto;">
+                                <table class="table table-hover align-middle table-sm border">
+                                    <thead class="table-light sticky-top">
+                                        <tr>
+                                            <th style="width: 25%;">ชื่อหมวดหมู่</th>
+                                            <th style="width: 55%;">คำพ้องความหมาย / คีย์เวิร์ด (Synonyms)</th>
+                                            <th style="width: 20%; text-align: center;">จัดการ</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="categoryTableBody">
+                                        <tr><td colspan="3" class="text-center text-muted py-3">กำลังโหลดหมวดหมู่...</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <hr>
+
+                            <!-- SECTION 2: Auto-Correction Rules (แก้ไขหมวดหมู่เวลาบันทึกไม่ตรง) -->
+                            <div class="card border-warning p-3 mb-4 bg-light bg-opacity-25">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <h6 class="mb-0 text-warning-emphasis fw-bold">
+                                        <i class="bi bi-magic"></i> กฎแก้ไขหมวดหมู่อัตโนมัติ (แก้ปัญหาบอทลงหมวดไม่ตรง)
+                                    </h6>
+                                    <span class="badge bg-warning text-dark" id="rules-count">0 กฎ</span>
+                                </div>
+                                <p class="small text-muted mb-2">
+                                    กำหนดคำเฉพาะ (เช่น <i>"เซเว่น", "หมูกระทะ", "ค่าเน็ต", "น้ำมัน"</i>) หากผู้ใช้พิมพ์คำนี้ ระบบจะบังคับลงเป็นหมวดหมู่ที่ตั้งไว้ทันที ป้องกันกรณีบอทลงเป็น "ทั่วไป" หรือจำแนกผิด
+                                </p>
+
+                                <!-- Quick Add Rule Form -->
+                                <div class="row g-2 mb-3 align-items-end">
+                                    <div class="col-md-4">
+                                        <label class="form-label small mb-1">เมื่อพบคำว่า (Keyword)</label>
+                                        <input type="text" id="newRuleKeyword" class="form-control form-control-sm" placeholder="เช่น เซเว่น, หมูกระทะ, bts">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label small mb-1">ประเภท</label>
+                                        <select id="newRuleType" class="form-select form-select-sm" onchange="populateRuleTargetCategoryDropdown()">
+                                            <option value="รายจ่าย">รายจ่าย</option>
+                                            <option value="รายรับ">รายรับ</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label small mb-1">ให้ลงเป็นหมวดหมู่</label>
+                                        <select id="newRuleTargetCategory" class="form-select form-select-sm">
+                                            <option value="">-- เลือกหมวดหมู่ --</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <button type="button" class="btn btn-warning btn-sm w-100 fw-bold" onclick="addRuleFromUI()">
+                                            <i class="bi bi-plus-circle"></i> เพิ่มกฎ
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Rules Badges List -->
+                                <div id="rulesListContainer" class="d-flex flex-wrap gap-2">
+                                    <div class="text-muted small">กำลังโหลดกฎ...</div>
+                                </div>
+                            </div>
+
+                            <!-- SECTION 3: Live Category Tester & Normalizer -->
+                            <div class="card border-info p-3 bg-light bg-opacity-25">
+                                <h6 class="mb-2 text-info-emphasis fw-bold">
+                                    <i class="bi bi-lightning-charge"></i> ทดสอบการวิเคราะห์ & แก้ไขหมวดหมู่ (Live Tester)
+                                </h6>
+                                <p class="small text-muted mb-2">
+                                    พิมพ์ประโยคทดสอบเพื่อดูว่าระบบจะจัดลงหมวดหมู่อะไร และใช้กฎหรือคำพ้องคำไหนในการตรวจจับ
+                                </p>
+                                <div class="input-group input-group-sm mb-2">
+                                    <input type="text" id="categoryTestInput" class="form-control" placeholder="เช่น 'ซื้อส้มตำปูปลาร้า 80 บาท' หรือ 'เติมน้ำมัน 800'" value="กินชาบูกับเพื่อน 599 บาท">
+                                    <select id="categoryTestType" class="form-select" style="max-width: 120px;">
+                                        <option value="รายจ่าย">รายจ่าย</option>
+                                        <option value="รายรับ">รายรับ</option>
+                                    </select>
+                                    <button type="button" class="btn btn-info text-white" onclick="testCategoryResolution()">
+                                        <i class="bi bi-play-circle"></i> ทดสอบ
+                                    </button>
+                                </div>
+
+                                <div id="categoryTestResult" class="p-2 rounded bg-white border d-none">
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <span class="small fw-bold">หมวดหมู่ที่จะถูกบันทึกจริง:</span>
+                                        <span id="testResultCategory" class="badge bg-success fs-6">อาหารและเครื่องดื่ม</span>
+                                    </div>
+                                    <div class="small text-muted">
+                                        วิธีที่จับคู่ได้: <span id="testResultMethod" class="fw-bold text-primary">item_synonym_match</span>
+                                        &nbsp;|&nbsp; คีย์เวิร์ดที่ตรวจพบ: <span id="testResultKeyword" class="badge bg-light text-dark border">ชาบู</span>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
                         <!-- OCR & AI Config -->
@@ -107,6 +985,59 @@
                             <div class="mb-3">
                                 <label class="form-label">Gemini API Key (สำหรับ GAS AI)</label>
                                 <input type="password" class="form-control" name="GEMINI_API_KEY" placeholder="AIza...">
+                            </div>
+                        </div>
+
+                        <!-- Test Tab -->
+                        <div id="tab-test" class="tab-content d-none">
+                            <h6 class="mb-3"><i class="bi bi-send-check text-primary"></i> ทดสอบส่งคำสั่ง Dialogflow Webhook</h6>
+                            <div class="row g-2 mb-3">
+                                <div class="col-md-6">
+                                    <label class="form-label small">เลือก Intent จำลอง</label>
+                                    <select class="form-select form-select-sm" id="testIntentSelect" onchange="updateTestPayload()">
+                                        <option value="บันทึกรายจ่าย">บันทึกรายจ่าย (เช่น ค่าอาหาร 60 บาท)</option>
+                                        <option value="บันทึกรายรับ">บันทึกรายรับ (เช่น เงินเดือน 30000 บาท)</option>
+                                        <option value="เช็คยอด">เช็คยอด (สรุปยอดคงเหลือ)</option>
+                                        <option value="บันทึกการซื้อ">บันทึกการซื้อ (หุ้น/คริปโต)</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label small">รายการ / จำนวนเงิน</label>
+                                    <div class="input-group input-group-sm">
+                                        <input type="text" class="form-control" id="testItem" placeholder="รายการ" value="ค่าอาหาร">
+                                        <input type="number" class="form-control" id="testAmount" placeholder="จำนวน" value="60">
+                                    </div>
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-outline-primary mb-3" onclick="sendTestDialogflow()">
+                                <i class="bi bi-play-circle"></i> ยิง Webhook ทดสอบ
+                            </button>
+
+                            <hr>
+                            <h6 class="mb-3"><i class="bi bi-file-earmark-image text-primary"></i> ทดสอบ OCR สแกนสลิป/ใบเสร็จ (/api/ocr/scan)</h6>
+                            <div class="mb-3">
+                                <input type="file" class="form-control form-control-sm" id="testOcrFile" accept="image/*">
+                            </div>
+                            <button type="button" class="btn btn-sm btn-outline-success mb-3" onclick="sendTestOcr()">
+                                <i class="bi bi-upload"></i> อัปโหลดและสแกน OCR
+                            </button>
+
+                            <div class="mt-2">
+                                <label class="form-label small font-monospace">Webhook Response Output:</label>
+                                <pre id="test-output" class="bg-dark text-light p-2 rounded" style="max-height: 180px; overflow-y: auto;">> ผลลัพธ์การทดสอบจะแสดงที่นี่...</pre>
+                            </div>
+
+                            <!-- Image Card Preview -->
+                            <div id="test-image-container" class="mt-3 p-3 bg-light border rounded d-none">
+                                <label class="form-label small fw-bold text-success"><i class="bi bi-image"></i> การ์ดรูปภาพตอบกลับ (Image Card Preview):</label>
+                                <div class="text-center">
+                                    <img id="test-image-preview" class="img-fluid rounded border shadow-sm" style="max-height: 380px;" src="" alt="Response Card">
+                                    <div class="mt-2">
+                                        <a id="test-image-link" href="#" target="_blank" class="btn btn-sm btn-outline-secondary">
+                                            <i class="bi bi-box-arrow-up-right"></i> เปิดดูรูปภาพขนาดเต็ม
+                                        </a>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
@@ -228,11 +1159,1556 @@
             alert(msg);
         }
 
+        function updateTestPayload() {
+            const intent = document.getElementById('testIntentSelect').value;
+            const itemInput = document.getElementById('testItem');
+            const amountInput = document.getElementById('testAmount');
+            if (intent === 'เช็คยอด') {
+                itemInput.disabled = true;
+                amountInput.disabled = true;
+            } else {
+                itemInput.disabled = false;
+                amountInput.disabled = false;
+                if (intent === 'บันทึกรายรับ') {
+                    itemInput.value = 'เงินเดือน';
+                    amountInput.value = '30000';
+                } else if (intent === 'บันทึกการซื้อ') {
+                    itemInput.value = 'BTC';
+                    amountInput.value = '1000';
+                } else {
+                    itemInput.value = 'ค่าอาหาร';
+                    amountInput.value = '60';
+                }
+            }
+        }
+
+        async function sendTestDialogflow() {
+            const intent = document.getElementById('testIntentSelect').value;
+            const item = document.getElementById('testItem').value;
+            const amount = parseFloat(document.getElementById('testAmount').value) || 0;
+            const outBox = document.getElementById('test-output');
+            outBox.innerText = '> กำลังส่ง Webhook ไปยัง /webhook/dialogflow...';
+
+            const payload = {
+                queryResult: {
+                    intent: { displayName: intent },
+                    parameters: {
+                        item: item,
+                        amount: amount,
+                        number: 1,
+                        account: 'เงินสด',
+                        'Expense-category': 'อาหารและเครื่องดื่ม',
+                        'Income_category': 'เงินเดือน'
+                    },
+                    queryText: `${intent} ${item} ${amount} บาท`
+                },
+                originalDetectIntentRequest: {
+                    source: 'telegram',
+                    payload: {
+                        data: {
+                            from: { username: 'AdminTester', first_name: 'Admin' }
+                        }
+                    }
+                }
+            };
+
+            try {
+                const res = await fetch('/webhook/dialogflow', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                outBox.innerText = JSON.stringify(data, null, 2);
+
+                // Check for image URL
+                const imgContainer = document.getElementById('test-image-container');
+                const imgPreview = document.getElementById('test-image-preview');
+                const imgLink = document.getElementById('test-image-link');
+                
+                const imageUrl = data.imageUrl || data.fulfillmentMessages?.find(m => m.image?.imageUri)?.image?.imageUri;
+                if (imageUrl) {
+                    imgPreview.src = imageUrl;
+                    imgLink.href = imageUrl;
+                    imgContainer.classList.remove('d-none');
+                } else {
+                    imgContainer.classList.add('d-none');
+                }
+            } catch (err) {
+                outBox.innerText = 'Error: ' + err.message;
+            }
+        }
+
+        async function sendTestOcr() {
+            const fileInput = document.getElementById('testOcrFile');
+            const outBox = document.getElementById('test-output');
+            if (!fileInput.files || fileInput.files.length === 0) {
+                alert('กรุณาเลือกไฟล์ภาพสลิป/ใบเสร็จก่อน');
+                return;
+            }
+
+            outBox.innerText = '> กำลังส่งภาพไปยัง /api/ocr/scan...';
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+            formData.append('type', 'รายจ่าย');
+            formData.append('recorder', 'Admin Preview Tester');
+
+            try {
+                const res = await fetch('/api/ocr/scan', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await res.json();
+                outBox.innerText = JSON.stringify(data, null, 2);
+
+                const imgContainer = document.getElementById('test-image-container');
+                const imgPreview = document.getElementById('test-image-preview');
+                const imgLink = document.getElementById('test-image-link');
+
+                if (data.imageUrl) {
+                    imgPreview.src = data.imageUrl;
+                    imgLink.href = data.imageUrl;
+                    imgContainer.classList.remove('d-none');
+                } else {
+                    imgContainer.classList.add('d-none');
+                }
+            } catch (err) {
+                outBox.innerText = 'Error: ' + err.message;
+            }
+        }
+
+        // ============================================================
+        // CATEGORIES & DIALOGFLOW ENTITIES LOGIC
+        // ============================================================
+        let categoriesState = {
+            expense: [],
+            income: [],
+            rules: []
+        };
+
+        async function loadCategoriesAndRules() {
+            try {
+                const res = await fetch('/api/categories');
+                const json = await res.json();
+                if (json.success && json.data) {
+                    categoriesState.expense = json.data.expenseCategories || json.data.categories?.expense || [];
+                    categoriesState.income = json.data.incomeCategories || json.data.categories?.income || [];
+                    categoriesState.rules = json.data.correctionRules || [];
+
+                    document.getElementById('expense-count').innerText = categoriesState.expense.length;
+                    document.getElementById('income-count').innerText = categoriesState.income.length;
+                    document.getElementById('rules-count').innerText = categoriesState.rules.length + ' กฎ';
+
+                    renderCategoryList();
+                    renderRulesList();
+                    populateRuleTargetCategoryDropdown();
+                }
+            } catch (err) {
+                console.error('[LOAD CATEGORIES ERROR]', err);
+            }
+        }
+
+        function getActiveCategoryType() {
+            const isExpense = document.getElementById('catFilterExpense').checked;
+            return isExpense ? 'expense' : 'income';
+        }
+
+        function renderCategoryList() {
+            const type = getActiveCategoryType();
+            const list = type === 'expense' ? categoriesState.expense : categoriesState.income;
+            const search = (document.getElementById('categorySearchInput').value || '').trim().toLowerCase();
+
+            const filtered = list.filter(cat => {
+                if (!search) return true;
+                if (cat.name && cat.name.toLowerCase().includes(search)) return true;
+                if (cat.synonyms && cat.synonyms.some(s => s.toLowerCase().includes(search))) return true;
+                return false;
+            });
+
+            const tbody = document.getElementById('categoryTableBody');
+            if (filtered.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="3" class="text-center text-muted py-4">
+                    ${search ? 'ไม่พบหมวดหมู่ที่ตรงกับคำค้นหา' : 'ยังไม่มีหมวดหมู่ในประเภทนี้ กดปุ่ม "+ เพิ่มหมวดหมู่ใหม่" หรือ "ดึงจาก Dialogflow"'}
+                </td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = filtered.map(cat => {
+                const synBadges = (cat.synonyms || []).map(s => 
+                    `<span class="badge bg-light text-dark border me-1 mb-1">${escapeHtml(s)}</span>`
+                ).join('');
+
+                const encodedName = encodeURIComponent(cat.name);
+                const safeSynonyms = (cat.synonyms || []).join(', ');
+
+                return `
+                    <tr>
+                        <td class="fw-bold">
+                            <span class="badge ${type === 'expense' ? 'bg-danger' : 'bg-success'} me-1">${type === 'expense' ? 'จ่าย' : 'รับ'}</span>
+                            ${escapeHtml(cat.name)}
+                        </td>
+                        <td>
+                            <div class="d-flex flex-wrap" style="max-height: 80px; overflow-y: auto;">
+                                ${synBadges || '<span class="text-muted small">ไม่มีคำพ้อง</span>'}
+                            </div>
+                        </td>
+                        <td class="text-center">
+                            <button type="button" class="btn btn-outline-primary btn-sm py-0 px-2 me-1" 
+                                onclick="openEditCategoryModal('${escapeHtml(cat.id || '')}', '${type}', '${escapeHtml(cat.name)}', '${escapeHtml(safeSynonyms)}')">
+                                <i class="bi bi-pencil"></i> แก้ไข
+                            </button>
+                            <button type="button" class="btn btn-outline-danger btn-sm py-0 px-2" 
+                                onclick="deleteCategoryItem('${type}', '${escapeHtml(cat.name)}')">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function openAddCategoryModal() {
+            document.getElementById('catModalTitle').innerText = 'เพิ่มหมวดหมู่ใหม่';
+            document.getElementById('catModalId').value = '';
+            document.getElementById('catModalType').value = getActiveCategoryType();
+            document.getElementById('catModalName').value = '';
+            document.getElementById('catModalSynonyms').value = '';
+            
+            const modalEl = document.getElementById('categoryModal');
+            const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+            modal.show();
+        }
+
+        function openEditCategoryModal(id, type, name, synonymsStr) {
+            document.getElementById('catModalTitle').innerText = 'แก้ไขหมวดหมู่ & คำพ้อง';
+            document.getElementById('catModalId').value = id || '';
+            document.getElementById('catModalType').value = type;
+            document.getElementById('catModalName').value = name;
+            document.getElementById('catModalSynonyms').value = synonymsStr;
+
+            const modalEl = document.getElementById('categoryModal');
+            const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+            modal.show();
+        }
+
+        async function saveCategoryFromModal() {
+            const id = document.getElementById('catModalId').value;
+            const type = document.getElementById('catModalType').value;
+            const name = document.getElementById('catModalName').value.trim();
+            const synonyms = document.getElementById('catModalSynonyms').value;
+
+            if (!name) {
+                alert('กรุณากรอกชื่อหมวดหมู่');
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/categories', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id, type, name, synonyms })
+                });
+                const json = await res.json();
+                if (json.success) {
+                    const modalEl = document.getElementById('categoryModal');
+                    const modal = bootstrap.Modal.getInstance(modalEl);
+                    if (modal) modal.hide();
+                    await loadCategoriesAndRules();
+                    showCategoryAlert(`บันทึกหมวดหมู่ "${name}" เรียบร้อยแล้ว`, 'success');
+                } else {
+                    alert('บันทึกล้มเหลว: ' + (json.error || 'Unknown error'));
+                }
+            } catch (err) {
+                alert('เกิดข้อผิดพลาด: ' + err.message);
+            }
+        }
+
+        async function deleteCategoryItem(type, name) {
+            if (!confirm(`คุณต้องการลบหมวดหมู่ "${name}" ใช่หรือไม่?`)) {
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/categories/${type}/${encodeURIComponent(name)}`, {
+                    method: 'DELETE'
+                });
+                const json = await res.json();
+                if (json.success) {
+                    await loadCategoriesAndRules();
+                    showCategoryAlert(`ลบหมวดหมู่ "${name}" เรียบร้อยแล้ว`, 'warning');
+                } else {
+                    alert('ลบไม่สำเร็จ: ' + (json.error || 'Unknown error'));
+                }
+            } catch (err) {
+                alert('เกิดข้อผิดพลาด: ' + err.message);
+            }
+        }
+
+        // ============================================================
+        // AUTO-CORRECTION RULES
+        // ============================================================
+        function renderRulesList() {
+            const container = document.getElementById('rulesListContainer');
+            const rules = categoriesState.rules || [];
+
+            if (rules.length === 0) {
+                container.innerHTML = '<span class="text-muted small">ยังไม่มีกฎแก้ไขหมวดหมู่</span>';
+                return;
+            }
+
+            container.innerHTML = rules.map(rule => `
+                <div class="badge bg-white text-dark border p-2 d-inline-flex align-items-center shadow-sm">
+                    <span class="badge ${rule.type === 'รายรับ' ? 'bg-success' : 'bg-danger'} me-2">${rule.type}</span>
+                    <span class="fw-bold me-1 text-primary">"${escapeHtml(rule.keyword)}"</span>
+                    <span class="text-muted me-2"><i class="bi bi-arrow-right"></i></span>
+                    <span class="badge bg-secondary me-2">${escapeHtml(rule.targetCategory)}</span>
+                    <button type="button" class="btn btn-close btn-sm" style="font-size: 0.65rem;" onclick="deleteRuleItem('${rule.id}')" title="ลบกฎ"></button>
+                </div>
+            `).join('');
+        }
+
+        function populateRuleTargetCategoryDropdown() {
+            const ruleType = document.getElementById('newRuleType').value;
+            const targetSelect = document.getElementById('newRuleTargetCategory');
+            const list = ruleType === 'รายรับ' ? categoriesState.income : categoriesState.expense;
+
+            targetSelect.innerHTML = '<option value="">-- เลือกหมวดหมู่เป้าหมาย --</option>' + 
+                list.map(c => `<option value="${escapeHtml(c.name)}">${escapeHtml(c.name)}</option>`).join('');
+        }
+
+        async function addRuleFromUI() {
+            const keyword = (document.getElementById('newRuleKeyword').value || '').trim();
+            const type = document.getElementById('newRuleType').value;
+            const targetCategory = document.getElementById('newRuleTargetCategory').value;
+
+            if (!keyword) {
+                alert('กรุณากรอกคำค้นหา (Keyword) เช่น เซเว่น, หมูกระทะ');
+                return;
+            }
+            if (!targetCategory) {
+                alert('กรุณาเลือกหมวดหมู่เป้าหมาย');
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/categories/rules', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ keyword, type, targetCategory })
+                });
+                const json = await res.json();
+                if (json.success) {
+                    document.getElementById('newRuleKeyword').value = '';
+                    await loadCategoriesAndRules();
+                    showCategoryAlert(`เพิ่มกฎ: พบ "${keyword}" -> บันทึกเป็น "${targetCategory}"`, 'success');
+                } else {
+                    alert('เพิ่มกฎล้มเหลว: ' + json.error);
+                }
+            } catch (err) {
+                alert('เกิดข้อผิดพลาด: ' + err.message);
+            }
+        }
+
+        async function deleteRuleItem(id) {
+            try {
+                const res = await fetch(`/api/categories/rules/${id}`, { method: 'DELETE' });
+                const json = await res.json();
+                if (json.success) {
+                    await loadCategoriesAndRules();
+                } else {
+                    alert('ลบกฎล้มเหลว: ' + json.error);
+                }
+            } catch (err) {
+                alert('เกิดข้อผิดพลาด: ' + err.message);
+            }
+        }
+
+        // ============================================================
+        // LIVE TESTER
+        // ============================================================
+        async function testCategoryResolution() {
+            const text = document.getElementById('categoryTestInput').value.trim();
+            const type = document.getElementById('categoryTestType').value;
+            if (!text) {
+                alert('กรุณาพิมพ์ข้อความทดสอบ');
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/categories/test', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text, type })
+                });
+                const json = await res.json();
+                if (json.success && json.result) {
+                    const result = json.result;
+                    const resultBox = document.getElementById('categoryTestResult');
+                    document.getElementById('testResultCategory').innerText = result.resolvedCategory;
+                    document.getElementById('testResultCategory').className = 'badge fs-6 ' + (type === 'รายรับ' ? 'bg-success' : 'bg-danger');
+                    document.getElementById('testResultMethod').innerText = formatMethodName(result.method);
+                    document.getElementById('testResultKeyword').innerText = result.matchedKeyword || 'ไม่มีคำพ้องตรงตัว (ใช้หมวดตั้งต้น)';
+                    resultBox.classList.remove('d-none');
+                }
+            } catch (err) {
+                alert('ทดสอบล้มเหลว: ' + err.message);
+            }
+        }
+
+        function formatMethodName(m) {
+            const map = {
+                'custom_rule': '✨ กฎแก้ไขหมวดหมู่อัตโนมัติ (Custom Rule)',
+                'item_synonym_match': '🔍 พบคำพ้องตรงกับชื่อรายการ (Item Synonym)',
+                'query_synonym_match': '💬 พบคำพ้องในประโยคที่ผู้ใช้พิมพ์ (Query Match)',
+                'exact_category': '🏷️ หมวดหมู่จาก Dialogflow ตรงกับระบบ',
+                'category_synonym_normalize': '🔄 แปลงคำพ้องของหมวดหมู่ให้เป็นชื่อมาตรฐาน',
+                'default_fallback': '⚠️ หมวดหมู่ตั้งต้น (ไม่มีคำพ้องตรง)'
+            };
+            return map[m] || m;
+        }
+
+        // ============================================================
+        // DIALOGFLOW INTEGRATION ACTIONS
+        // ============================================================
+        async function checkDialogflowStatus() {
+            try {
+                const res = await fetch('/api/categories/dialogflow/status');
+                const json = await res.json();
+                const dfBadge = document.getElementById('status-dialogflow');
+                const dfTopBadge = document.getElementById('df-status-badge');
+                const dfProjectBadge = document.getElementById('df-project-id-badge');
+
+                if (json.success && json.connected) {
+                    dfBadge.className = 'status-badge bg-success text-white';
+                    dfBadge.innerText = 'Connected';
+                    dfTopBadge.className = 'badge bg-success';
+                    dfTopBadge.innerText = 'Online / Ready';
+                    dfProjectBadge.className = 'badge bg-primary';
+                    dfProjectBadge.innerText = json.projectId || 'Auto-detected';
+                } else {
+                    dfBadge.className = 'status-badge bg-warning text-dark';
+                    dfBadge.innerText = json.projectId ? 'Ready (Keys Set)' : 'No Project ID';
+                    dfTopBadge.className = 'badge bg-warning text-dark';
+                    dfTopBadge.innerText = json.projectId ? 'Ready' : 'Not Connected';
+                    dfProjectBadge.innerText = json.projectId || 'ยังไม่พบ Project ID';
+                }
+            } catch (err) {
+                console.warn('[DF STATUS ERROR]', err);
+            }
+        }
+
+        async function syncFromDialogflow(entityType, type) {
+            showCategoryAlert(`กำลังดึงข้อมูลจาก Dialogflow (${entityType})...`, 'info');
+            try {
+                const res = await fetch('/api/categories/dialogflow/sync-from', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ entityType, type })
+                });
+                const json = await res.json();
+                if (json.success) {
+                    await loadCategoriesAndRules();
+                    showCategoryAlert(json.message || `ดึงสำเร็จ! เพิ่ม/อัปเดต ${json.importedCount} หมวดหมู่`, 'success');
+                } else {
+                    showCategoryAlert(`ดึงข้อมูลไม่สำเร็จ: ${json.error}`, 'danger');
+                }
+            } catch (err) {
+                showCategoryAlert(`เกิดข้อผิดพลาด: ${err.message}`, 'danger');
+            }
+        }
+
+        async function syncToDialogflow(entityType, type) {
+            showCategoryAlert(`กำลังส่งข้อมูลหมวดหมู่ขึ้น Dialogflow (${entityType})...`, 'info');
+            try {
+                const res = await fetch('/api/categories/dialogflow/sync-to', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ entityType, type })
+                });
+                const json = await res.json();
+                if (json.success) {
+                    showCategoryAlert(json.message || `อัปเดต Dialogflow สำเร็จ! (${json.exportedCount} หมวดหมู่)`, 'success');
+                } else {
+                    showCategoryAlert(`ส่งข้อมูลไม่สำเร็จ: ${json.error}`, 'danger');
+                }
+            } catch (err) {
+                showCategoryAlert(`เกิดข้อผิดพลาด: ${err.message}`, 'danger');
+            }
+        }
+
+        async function openDfEntityTypesModal() {
+            const listEl = document.getElementById('dfEntityTypesList');
+            listEl.innerHTML = '<div class="text-center py-3"><div class="spinner-border text-primary"></div><div class="mt-2 text-muted">กำลังเรียกดู Entity Types จาก Dialogflow Agent...</div></div>';
+            
+            const modalEl = document.getElementById('dfEntityTypesModal');
+            const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+            modal.show();
+
+            try {
+                const res = await fetch('/api/categories/dialogflow/entity-types');
+                const json = await res.json();
+                if (json.success && json.entityTypes) {
+                    if (json.entityTypes.length === 0) {
+                        listEl.innerHTML = '<div class="alert alert-warning">ไม่พบ Entity Types ใน Dialogflow Agent หรือยังไม่มีการสร้างไว้</div>';
+                        return;
+                    }
+
+                    listEl.innerHTML = `
+                        <div class="mb-2 text-muted small">พบทั้งหมด ${json.entityTypes.length} Entity Types ใน Agent:</div>
+                        <div class="list-group">
+                            ${json.entityTypes.map(et => `
+                                <div class="list-group-item d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <div class="fw-bold text-primary">${escapeHtml(et.displayName)}</div>
+                                        <div class="small text-muted font-monospace">${escapeHtml(et.name)}</div>
+                                    </div>
+                                    <div class="d-flex gap-2">
+                                        <span class="badge bg-light text-dark border">${et.kind || 'KIND_MAP'}</span>
+                                        <button class="btn btn-sm btn-outline-primary" onclick="syncFromDialogflow('${escapeHtml(et.displayName)}', '${et.displayName.toLowerCase().includes('income') ? 'income' : 'expense'}')">
+                                            <i class="bi bi-download"></i> ดึงข้อมูล
+                                        </button>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `;
+                } else {
+                    listEl.innerHTML = `<div class="alert alert-danger">${escapeHtml(json.error || 'ไม่สามารถเชื่อมต่อได้')}</div>`;
+                }
+            } catch (err) {
+                listEl.innerHTML = `<div class="alert alert-danger">${escapeHtml(err.message)}</div>`;
+            }
+        }
+
+        function showCategoryAlert(message, type) {
+            const alertBox = document.getElementById('df-sync-alert');
+            alertBox.className = `small alert alert-${type} py-1 px-2 mb-0`;
+            alertBox.innerHTML = `<i class="bi bi-info-circle me-1"></i> ${escapeHtml(message)}`;
+            alertBox.classList.remove('d-none');
+            setTimeout(() => {
+                alertBox.classList.add('d-none');
+            }, 6000);
+        }
+
+        // ============================================================
+        // CHATBOT INTERFACE JAVASCRIPT LOGIC
+        // ============================================================
+        let speechRecognizer = null;
+        let isListening = false;
+        let pendingSlipFile = null;
+
+        function switchMainView(view) {
+            const viewChat = document.getElementById('view-chat');
+            const viewTelegram = document.getElementById('view-telegram');
+            const viewAdmin = document.getElementById('view-admin');
+            const btnNavChat = document.getElementById('btnNavChat');
+            const btnNavTelegram = document.getElementById('btnNavTelegram');
+            const btnNavAdmin = document.getElementById('btnNavAdmin');
+
+            // Hide all views first
+            viewChat?.classList.add('d-none');
+            viewTelegram?.classList.add('d-none');
+            viewAdmin?.classList.add('d-none');
+
+            // Reset buttons to outline
+            if (btnNavChat) {
+                btnNavChat.className = 'btn btn-outline-light';
+                btnNavChat.innerHTML = '<i class="bi bi-chat-dots"></i> ใช้งานผ่านแชท';
+            }
+            if (btnNavTelegram) {
+                btnNavTelegram.className = 'btn btn-outline-light';
+                btnNavTelegram.innerHTML = '<i class="bi bi-telegram text-info"></i> Telegram Bot';
+            }
+            if (btnNavAdmin) {
+                btnNavAdmin.className = 'btn btn-outline-light';
+                btnNavAdmin.innerHTML = '<i class="bi bi-sliders2"></i> จัดการระบบ';
+            }
+
+            if (view === 'chat') {
+                viewChat?.classList.remove('d-none');
+                if (btnNavChat) {
+                    btnNavChat.className = 'btn btn-light fw-bold';
+                    btnNavChat.innerHTML = '<i class="bi bi-chat-dots-fill text-primary"></i> ใช้งานผ่านแชท';
+                }
+                scrollToBottomChat();
+                document.getElementById('chatInputText')?.focus();
+            } else if (view === 'telegram') {
+                viewTelegram?.classList.remove('d-none');
+                if (btnNavTelegram) {
+                    btnNavTelegram.className = 'btn btn-light fw-bold';
+                    btnNavTelegram.innerHTML = '<i class="bi bi-telegram text-primary"></i> Telegram Bot';
+                }
+                checkTelegramStatus();
+                const detectedInput = document.getElementById('tgDetectedWebhookUrl');
+                if (detectedInput && !detectedInput.value) {
+                    detectedInput.value = `${window.location.origin}/webhook/telegram`;
+                }
+            } else {
+                viewAdmin?.classList.remove('d-none');
+                if (btnNavAdmin) {
+                    btnNavAdmin.className = 'btn btn-light fw-bold';
+                    btnNavAdmin.innerHTML = '<i class="bi bi-sliders2-vertical text-primary"></i> จัดการระบบ';
+                }
+            }
+        }
+
+        // ============================================================
+        // TELEGRAM BOT JAVASCRIPT CONTROLLER
+        // ============================================================
+        let tgBotInfo = null;
+
+        async function checkTelegramStatus(manual = false) {
+            const statusPill = document.getElementById('tg-status-pill');
+            const connectionBadge = document.getElementById('tg-connection-badge');
+            const sidebarBadge = document.getElementById('status-telegram');
+            const btnOpen = document.getElementById('btnOpenTelegramDirect');
+            const detectedUrlInput = document.getElementById('tgDetectedWebhookUrl');
+            
+            if (detectedUrlInput) {
+                detectedUrlInput.value = `${window.location.origin}/webhook/telegram`;
+            }
+
+            try {
+                const res = await fetch('/api/telegram/status');
+                const data = await res.json();
+
+                if (data.success) {
+                    tgBotInfo = data;
+                    const b = data.bot;
+                    const w = data.webhook;
+
+                    if (sidebarBadge) {
+                        sidebarBadge.className = 'status-badge ' + (data.ready ? 'bg-success' : 'bg-warning text-dark');
+                        sidebarBadge.innerText = data.ready ? 'Online' : 'Pending';
+                    }
+
+                    if (data.ready) {
+                        if (statusPill) {
+                            statusPill.className = 'badge bg-success rounded-pill fs-6 fw-normal';
+                            statusPill.innerHTML = '<i class="bi bi-check-circle-fill me-1"></i> พร้อมใช้งาน (Online)';
+                        }
+                        if (connectionBadge) {
+                            connectionBadge.className = 'badge bg-success';
+                            connectionBadge.innerText = 'เชื่อมต่อแล้ว';
+                        }
+                    } else if (data.hasToken) {
+                        if (statusPill) {
+                            statusPill.className = 'badge bg-warning text-dark rounded-pill fs-6 fw-normal';
+                            statusPill.innerHTML = '<i class="bi bi-exclamation-circle-fill me-1"></i> มี Token แล้ว (รอผูก Webhook)';
+                        }
+                        if (connectionBadge) {
+                            connectionBadge.className = 'badge bg-warning text-dark';
+                            connectionBadge.innerText = 'รอผูก Webhook';
+                        }
+                    } else {
+                        if (statusPill) {
+                            statusPill.className = 'badge bg-secondary rounded-pill fs-6 fw-normal';
+                            statusPill.innerHTML = '<i class="bi bi-dash-circle me-1"></i> ยังไม่ได้ระบุ Token';
+                        }
+                        if (connectionBadge) {
+                            connectionBadge.className = 'badge bg-secondary';
+                            connectionBadge.innerText = 'ไม่ได้ตั้งค่า';
+                        }
+                    }
+
+                    // Bot details
+                    document.getElementById('tg-bot-name').innerText = b?.first_name || (data.hasToken ? 'DevMus Assistant' : 'ยังไม่เชื่อมต่อ');
+                    const usernameEl = document.getElementById('tg-bot-username');
+                    if (b?.username) {
+                        usernameEl.innerHTML = `<a href="https://t.me/${b.username}" target="_blank" class="text-decoration-none">@${b.username} <i class="bi bi-box-arrow-up-right small"></i></a>`;
+                        if (btnOpen) {
+                            btnOpen.href = `https://t.me/${b.username}`;
+                            btnOpen.classList.remove('d-none');
+                        }
+                        document.getElementById('simTopBotName').innerText = b.first_name || `@${b.username}`;
+                    } else {
+                        usernameEl.innerText = '-';
+                        if (btnOpen) btnOpen.classList.add('d-none');
+                    }
+
+                    document.getElementById('tg-bot-token-masked').innerText = data.tokenMasked || 'ยังไม่มีการตั้งค่า';
+                    
+                    const webhookStateEl = document.getElementById('tg-webhook-state');
+                    if (w?.url) {
+                        webhookStateEl.innerHTML = `<span class="badge bg-success"><i class="bi bi-link-45deg"></i> ผูกสำเร็จ (${w.url})</span>`;
+                        if (detectedUrlInput) detectedUrlInput.value = w.url;
+                    } else {
+                        webhookStateEl.innerHTML = `<span class="badge bg-warning text-dark">ยังไม่ได้ผูก Webhook</span>`;
+                    }
+
+                    if (data.defaultChatId && !document.getElementById('tgInputChatId').value) {
+                        document.getElementById('tgInputChatId').value = data.defaultChatId;
+                    }
+
+                    if (manual) {
+                        showTelegramAlert('อัปเดตสถานะ Telegram สำเร็จแล้ว', 'success');
+                    }
+                }
+            } catch (err) {
+                if (sidebarBadge) {
+                    sidebarBadge.className = 'status-badge bg-danger text-white';
+                    sidebarBadge.innerText = 'Error';
+                }
+                if (statusPill) {
+                    statusPill.className = 'badge bg-danger rounded-pill fs-6 fw-normal';
+                    statusPill.innerText = 'ขัดข้อง';
+                }
+                if (manual) {
+                    showTelegramAlert(`เกิดข้อผิดพลาดในการตรวจสอบ: ${err.message}`, 'danger');
+                }
+            }
+        }
+
+        async function autoRegisterTelegramWebhook() {
+            const detectedUrl = document.getElementById('tgDetectedWebhookUrl').value || `${window.location.origin}/webhook/telegram`;
+            showTelegramAlert('กำลังผูก Webhook ไปยัง Telegram...', 'info');
+
+            try {
+                const res = await fetch('/api/telegram/set-webhook', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ webhookUrl: detectedUrl })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showTelegramAlert(`✅ ${data.message || 'ผูก Webhook กับ Telegram สำเร็จเรียบร้อย!'}`, 'success');
+                    await checkTelegramStatus();
+                } else {
+                    showTelegramAlert(`❌ ไม่สามารถผูก Webhook ได้: ${data.error || 'กรุณาตรวจสอบว่ากรอก Token ถูกต้อง'}`, 'danger');
+                }
+            } catch (err) {
+                showTelegramAlert(`❌ เกิดข้อผิดพลาด: ${err.message}`, 'danger');
+            }
+        }
+
+        async function deleteTelegramWebhook() {
+            if (!confirm('คุณต้องการปลด Webhook ของ Telegram Bot หรือไม่?')) return;
+            showTelegramAlert('กำลังปลด Webhook...', 'info');
+
+            try {
+                const res = await fetch('/api/telegram/delete-webhook', { method: 'POST' });
+                const data = await res.json();
+                if (data.success) {
+                    showTelegramAlert('✅ ปลด Webhook เรียบร้อยแล้ว', 'warning');
+                    await checkTelegramStatus();
+                } else {
+                    showTelegramAlert(`❌ เกิดข้อผิดพลาด: ${data.error}`, 'danger');
+                }
+            } catch (err) {
+                showTelegramAlert(`❌ ข้อผิดพลาด: ${err.message}`, 'danger');
+            }
+        }
+
+        async function saveTelegramSettings(e) {
+            e.preventDefault();
+            const token = document.getElementById('tgInputToken').value.trim();
+            const chatId = document.getElementById('tgInputChatId').value.trim();
+
+            const payload = {};
+            if (token) payload.TELEGRAM_BOT_TOKEN = token;
+            if (chatId) payload.MY_TELEGRAM_CHAT_ID = chatId;
+
+            if (Object.keys(payload).length === 0) {
+                showTelegramAlert('กรุณากรอก Token หรือ Chat ID ก่อนบันทึก', 'warning');
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/admin/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showTelegramAlert('บันทึกการตั้งค่า Telegram Bot สำเร็จ!', 'success');
+                    document.getElementById('tgInputToken').value = '';
+                    await checkTelegramStatus();
+                } else {
+                    showTelegramAlert(`บันทึกไม่สำเร็จ: ${data.message || 'เกิดข้อผิดพลาด'}`, 'danger');
+                }
+            } catch (err) {
+                showTelegramAlert(`บันทึกขัดข้อง: ${err.message}`, 'danger');
+            }
+        }
+
+        async function sendTelegramTestMessage() {
+            const chatId = document.getElementById('tgInputChatId').value.trim();
+            showTelegramAlert('กำลังส่งข้อความทดสอบไปยัง Telegram...', 'info');
+
+            try {
+                const res = await fetch('/api/telegram/test-message', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        chatId: chatId || undefined,
+                        message: '🔔 ทดสอบการเชื่อมต่อ: DevMus Financial Bot พร้อมทำงานบน Telegram เรียบร้อยแล้วครับ!'
+                    })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showTelegramAlert('✅ ส่งข้อความทดสอบสำเร็จ! โปรดเปิดแอป Telegram เพื่อดูข้อความ', 'success');
+                } else {
+                    showTelegramAlert(`❌ ไม่สามารถส่งข้อความได้: ${data.error}`, 'danger');
+                }
+            } catch (err) {
+                showTelegramAlert(`❌ การส่งข้อความขัดข้อง: ${err.message}`, 'danger');
+            }
+        }
+
+        function showTelegramAlert(msg, type = 'info') {
+            const el = document.getElementById('tg-webhook-alert');
+            if (el) {
+                el.className = `alert alert-${type} mt-2 py-2 small mb-0`;
+                el.innerHTML = msg;
+                el.classList.remove('d-none');
+            }
+        }
+
+        function toggleTokenVisibility() {
+            const input = document.getElementById('tgInputToken');
+            const icon = document.getElementById('tgTokenEyeIcon');
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.className = 'bi bi-eye-slash';
+            } else {
+                input.type = 'password';
+                icon.className = 'bi bi-eye';
+            }
+        }
+
+        function copyTelegramWebhookUrl() {
+            const input = document.getElementById('tgDetectedWebhookUrl');
+            if (input) {
+                navigator.clipboard.writeText(input.value).then(() => {
+                    showTelegramAlert('คัดลอก Webhook URL ไปยังคลิปบอร์ดแล้ว', 'success');
+                }).catch(() => {
+                    input.select();
+                    document.execCommand('copy');
+                    showTelegramAlert('คัดลอก URL แล้ว', 'success');
+                });
+            }
+        }
+
+        // --- Simulator Logic ---
+        async function simulateTelegramMessage(text) {
+            if (!text) return;
+            const container = document.getElementById('tgMockMessages');
+            if (!container) return;
+
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+
+            // User bubble
+            const userBubble = document.createElement('div');
+            userBubble.className = 'tg-bubble user';
+            userBubble.innerHTML = `
+                <div>${escapeHtml(text)}</div>
+                <div class="small text-end opacity-75 mt-1" style="font-size: 0.65rem;">${timeStr} ✓✓</div>
+            `;
+            container.appendChild(userBubble);
+            container.scrollTop = container.scrollHeight;
+
+            // Typing preview
+            const typingBubble = document.createElement('div');
+            typingBubble.className = 'tg-bubble';
+            typingBubble.id = 'tgSimTyping';
+            typingBubble.innerHTML = '<span class="text-muted small"><em>กำลังพิมพ์...</em></span>';
+            container.appendChild(typingBubble);
+            container.scrollTop = container.scrollHeight;
+
+            try {
+                const res = await fetch('/api/chat/message', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: text, platform: 'Telegram Bot', recorder: 'Telegram User' })
+                });
+                const data = await res.json();
+                typingBubble.remove();
+
+                const botBubble = document.createElement('div');
+                botBubble.className = 'tg-bubble';
+
+                let cardHtml = '';
+                if (data.cardImageUrl) {
+                    cardHtml = `
+                        <div class="mt-2 mb-2 text-center">
+                            <img src="${data.cardImageUrl}" class="img-fluid rounded border shadow-sm" style="max-height: 200px; cursor: pointer;" onclick="zoomImage('${data.cardImageUrl}')" alt="Card">
+                        </div>
+                    `;
+                }
+
+                let quickRepliesHtml = '';
+                if (data.quickReplies && data.quickReplies.length > 0) {
+                    quickRepliesHtml = `
+                        <div class="d-flex flex-wrap gap-1 mt-2 pt-1 border-top">
+                            ${data.quickReplies.map(qr => `
+                                <button type="button" class="tg-btn-chip" onclick="simulateTelegramMessage('${escapeHtml(qr)}')">
+                                    ${escapeHtml(qr)}
+                                </button>
+                            `).join('')}
+                        </div>
+                    `;
+                }
+
+                botBubble.innerHTML = `
+                    <div class="fw-bold text-primary mb-1" style="font-size: 0.78rem;">🤖 DevMus Assistant</div>
+                    <div>${renderMarkdownText(data.text || '')}</div>
+                    ${cardHtml}
+                    ${quickRepliesHtml}
+                    <div class="text-muted small text-end mt-1" style="font-size: 0.65rem;">${timeStr}</div>
+                `;
+                container.appendChild(botBubble);
+                container.scrollTop = container.scrollHeight;
+            } catch (err) {
+                typingBubble.remove();
+                const errBubble = document.createElement('div');
+                errBubble.className = 'tg-bubble text-danger';
+                errBubble.innerText = `❌ ข้อผิดพลาด: ${err.message}`;
+                container.appendChild(errBubble);
+                container.scrollTop = container.scrollHeight;
+            }
+        }
+
+        function handleSimulatorSubmit(e) {
+            e.preventDefault();
+            const input = document.getElementById('tgSimInput');
+            if (!input) return;
+            const text = input.value.trim();
+            if (text) {
+                input.value = '';
+                simulateTelegramMessage(text);
+            }
+        }
+
+        function scrollToBottomChat() {
+            const chatMessages = document.getElementById('chatMessages');
+            if (chatMessages) {
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }
+        }
+
+        function renderMarkdownText(text) {
+            if (!text) return '';
+            let html = escapeHtml(text);
+            // Bold **text**
+            html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+            // Italic *text*
+            html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
+            // List bullets
+            html = html.replace(/^[•\-\*]\s+(.*)$/gm, '<li>$1</li>');
+            html = html.replace(/(<li>.*<\/li>)/s, '<ul class="mb-2 ps-3">$1</ul>');
+            // Line breaks
+            html = html.replace(/\n/g, '<br>');
+            return html;
+        }
+
+        function appendMessageRow(role, content, options = {}) {
+            const chatMessages = document.getElementById('chatMessages');
+            if (!chatMessages) return;
+
+            const timeStr = options.time || new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+            const row = document.createElement('div');
+            row.className = `message-row ${role}`;
+
+            let cardHtml = '';
+            if (options.cardImageUrl) {
+                cardHtml = `
+                    <div class="mt-2 text-start">
+                        <img src="${options.cardImageUrl}" alt="Receipt Card" class="chat-card-img" onclick="zoomImage('${options.cardImageUrl}')" title="คลิกเพื่อดูภาพขนาดใหญ่">
+                        <div class="mt-1">
+                            <a href="${options.cardImageUrl}" target="_blank" class="btn btn-sm btn-outline-primary py-0 px-2 rounded-pill" style="font-size: 0.72rem;">
+                                <i class="bi bi-arrows-fullscreen me-1"></i> ดูการ์ดเต็มจอ
+                            </a>
+                        </div>
+                    </div>
+                `;
+            }
+
+            let quickRepliesHtml = '';
+            if (options.quickReplies && options.quickReplies.length > 0) {
+                quickRepliesHtml = `
+                    <div class="d-flex flex-wrap gap-1 mt-2">
+                        ${options.quickReplies.map(qr => `
+                            <button type="button" class="btn btn-sm btn-outline-primary py-1 px-2 rounded-pill text-nowrap" style="font-size: 0.78rem;" onclick="sendQuickMessage('${escapeHtml(qr)}')">
+                                ${escapeHtml(qr)}
+                            </button>
+                        `).join('')}
+                    </div>
+                `;
+            }
+
+            if (role === 'user') {
+                row.innerHTML = `
+                    <div class="message-bubble">
+                        <div>${renderMarkdownText(content)}</div>
+                        ${cardHtml}
+                        <span class="message-time text-end text-white-50">${timeStr}</span>
+                    </div>
+                    <div class="message-avatar user"><i class="bi bi-person-fill"></i></div>
+                `;
+            } else {
+                row.innerHTML = `
+                    <div class="message-avatar bot"><i class="bi bi-robot"></i></div>
+                    <div class="message-bubble">
+                        <div>${renderMarkdownText(content)}</div>
+                        ${cardHtml}
+                        ${quickRepliesHtml}
+                        <span class="message-time text-muted">${timeStr}</span>
+                    </div>
+                `;
+            }
+
+            chatMessages.appendChild(row);
+            scrollToBottomChat();
+            saveChatHistory();
+        }
+
+        function showTypingIndicator(show = true) {
+            const indicator = document.getElementById('chatTypingIndicator');
+            if (indicator) {
+                if (show) {
+                    indicator.classList.remove('d-none');
+                } else {
+                    indicator.classList.add('d-none');
+                }
+                scrollToBottomChat();
+            }
+        }
+
+        async function handleChatSubmit(e) {
+            if (e) e.preventDefault();
+            const input = document.getElementById('chatInputText');
+            const text = input.value.trim();
+
+            if (pendingSlipFile) {
+                await uploadSelectedSlipFile();
+                return;
+            }
+
+            if (!text) return;
+            input.value = '';
+
+            // User bubble
+            appendMessageRow('user', text);
+            showTypingIndicator(true);
+
+            try {
+                const res = await fetch('/api/chat/message', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: text, recorder: 'ผู้ใช้แชท', platform: 'Web Chat' })
+                });
+                const data = await res.json();
+                showTypingIndicator(false);
+
+                if (data.success) {
+                    appendMessageRow('bot', data.text, {
+                        cardImageUrl: data.cardImageUrl,
+                        quickReplies: data.quickReplies
+                    });
+                } else {
+                    appendMessageRow('bot', `❌ เกิดข้อผิดพลาด: ${data.text || 'ไม่สามารถประมวลผลได้'}`);
+                }
+            } catch (err) {
+                showTypingIndicator(false);
+                appendMessageRow('bot', `❌ การเชื่อมต่อขัดข้อง: ${err.message}`);
+            }
+        }
+
+        function sendQuickMessage(text) {
+            const input = document.getElementById('chatInputText');
+            if (input) {
+                input.value = text;
+                handleChatSubmit();
+            }
+        }
+
+        // --- Slip / Receipt Upload Handling ---
+        function triggerSlipFileInput() {
+            document.getElementById('slipFileInput')?.click();
+        }
+
+        function handleSlipFileSelect(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            pendingSlipFile = file;
+            const banner = document.getElementById('attachmentPreviewBanner');
+            const fileName = document.getElementById('attachmentFileName');
+            if (banner && fileName) {
+                fileName.innerText = file.name;
+                banner.classList.remove('d-none');
+                banner.classList.add('d-flex');
+            }
+
+            // ส่งอัตโนมัติเพื่อความสะดวกรวดเร็ว
+            uploadSelectedSlipFile();
+        }
+
+        function cancelAttachment() {
+            pendingSlipFile = null;
+            const banner = document.getElementById('attachmentPreviewBanner');
+            const fileInput = document.getElementById('slipFileInput');
+            if (banner) {
+                banner.classList.add('d-none');
+                banner.classList.remove('d-flex');
+            }
+            if (fileInput) fileInput.value = '';
+        }
+
+        async function uploadSelectedSlipFile() {
+            if (!pendingSlipFile) return;
+            const file = pendingSlipFile;
+            cancelAttachment();
+
+            appendMessageRow('user', `📷 [แนบภาพสลิป/ใบเสร็จ: ${file.name}]`);
+            showTypingIndicator(true);
+
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('recorder', 'ผู้ใช้แชท');
+
+            try {
+                const res = await fetch('/api/chat/upload-slip', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await res.json();
+                showTypingIndicator(false);
+
+                if (data.success) {
+                    appendMessageRow('bot', data.text, {
+                        cardImageUrl: data.cardImageUrl,
+                        quickReplies: data.quickReplies
+                    });
+                } else {
+                    appendMessageRow('bot', data.text || '❌ ไม่สามารถอ่านสลิปได้');
+                }
+            } catch (err) {
+                showTypingIndicator(false);
+                appendMessageRow('bot', `❌ เกิดข้อผิดพลาดในการส่งรูปสลิป: ${err.message}`);
+            }
+        }
+
+        // --- Speech to Text Recognition ---
+        function toggleSpeechRecognition() {
+            const btnMic = document.getElementById('btnMic');
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+            if (!SpeechRecognition) {
+                alert('เบราว์เซอร์ของคุณยังไม่รองรับ Web Speech API (แนะนำ Google Chrome)');
+                return;
+            }
+
+            if (isListening && speechRecognizer) {
+                speechRecognizer.stop();
+                return;
+            }
+
+            try {
+                speechRecognizer = new SpeechRecognition();
+                speechRecognizer.lang = 'th-TH';
+                speechRecognizer.interimResults = false;
+                speechRecognizer.maxAlternatives = 1;
+
+                speechRecognizer.onstart = () => {
+                    isListening = true;
+                    btnMic?.classList.add('mic-active');
+                    btnMic?.setAttribute('title', 'กำลังฟังเสียง... (คลิกเพื่อหยุด)');
+                };
+
+                speechRecognizer.onresult = (event) => {
+                    const transcript = event.results[0][0].transcript;
+                    const input = document.getElementById('chatInputText');
+                    if (input && transcript) {
+                        input.value = transcript;
+                        handleChatSubmit();
+                    }
+                };
+
+                speechRecognizer.onerror = (event) => {
+                    console.warn('[STT Error]', event.error);
+                    stopListeningUI();
+                };
+
+                speechRecognizer.onend = () => {
+                    stopListeningUI();
+                };
+
+                speechRecognizer.start();
+            } catch (err) {
+                console.error('[STT Init Error]', err);
+                stopListeningUI();
+            }
+        }
+
+        function stopListeningUI() {
+            isListening = false;
+            const btnMic = document.getElementById('btnMic');
+            btnMic?.classList.remove('mic-active');
+            btnMic?.setAttribute('title', 'พิมพ์ด้วยเสียง (พูดภาษาไทย)');
+        }
+
+        // --- Drag and Drop Slip Image ---
+        function initDragAndDrop() {
+            const chatBox = document.getElementById('chatCardBox');
+            const overlay = document.getElementById('dragDropOverlay');
+            if (!chatBox || !overlay) return;
+
+            let dragCounter = 0;
+
+            chatBox.addEventListener('dragenter', (e) => {
+                e.preventDefault();
+                dragCounter++;
+                overlay.classList.remove('d-none');
+            });
+
+            chatBox.addEventListener('dragleave', (e) => {
+                e.preventDefault();
+                dragCounter--;
+                if (dragCounter <= 0) {
+                    overlay.classList.add('d-none');
+                    dragCounter = 0;
+                }
+            });
+
+            chatBox.addEventListener('dragover', (e) => {
+                e.preventDefault();
+            });
+
+            chatBox.addEventListener('drop', (e) => {
+                e.preventDefault();
+                dragCounter = 0;
+                overlay.classList.add('d-none');
+
+                if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) {
+                    const file = e.dataTransfer.files[0];
+                    if (file.type.startsWith('image/')) {
+                        pendingSlipFile = file;
+                        uploadSelectedSlipFile();
+                    }
+                }
+            });
+        }
+
+        // --- Balance Modal ---
+        async function openBalanceModal() {
+            const modal = new bootstrap.Modal(document.getElementById('balanceModal'));
+            modal.show();
+
+            const body = document.getElementById('balanceModalBody');
+            body.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary"></div><div class="mt-2 text-muted">กำลังดึงข้อมูลสรุปยอดบัญชี...</div></div>';
+
+            try {
+                const res = await fetch('/api/chat/balance');
+                const data = await res.json();
+
+                if (data.success && data.summary) {
+                    const s = data.summary;
+                    const netColor = s.balance >= 0 ? 'text-success' : 'text-danger';
+
+                    body.innerHTML = `
+                        <div class="text-center p-3 mb-3 bg-light rounded-4">
+                            <div class="small text-muted mb-1">ยอดเงินคงเหลือสุทธิ (รวมทุกบัญชี)</div>
+                            <div class="fs-2 fw-bold ${netColor}">
+                                ${Number(s.balance || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 })} <span class="fs-6 text-muted">บาท</span>
+                            </div>
+                            <div class="small text-muted mt-1">ข้อมูล ณ วันที่: ${s.formattedDate || 'วันนี้'}</div>
+                        </div>
+
+                        <div class="row g-2 mb-3">
+                            <div class="col-6">
+                                <div class="card p-3 bg-success-subtle border-0 h-100 text-center">
+                                    <div class="small text-success fw-medium"><i class="bi bi-arrow-down-left"></i> รายรับวันนี้</div>
+                                    <div class="fs-5 fw-bold text-success mt-1">
+                                        +${Number(s.dailyIncome || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 })}
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="card p-3 bg-danger-subtle border-0 h-100 text-center">
+                                    <div class="small text-danger fw-medium"><i class="bi bi-arrow-up-right"></i> รายจ่ายวันนี้</div>
+                                    <div class="fs-5 fw-bold text-danger mt-1">
+                                        -${Number(s.dailyExpense || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 })}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        ${s.accountBalances && s.accountBalances.length > 0 ? `
+                            <h6 class="fw-bold mb-2"><i class="bi bi-wallet2 text-primary"></i> ยอดแยกตามกระเป๋า / ธนาคาร</h6>
+                            <div class="list-group mb-3">
+                                ${s.accountBalances.map(a => `
+                                    <div class="list-group-item d-flex justify-content-between align-items-center py-2">
+                                        <span><i class="bi bi-bank me-2 text-muted"></i>${a.name}</span>
+                                        <span class="fw-bold text-dark">${Number(a.amount).toLocaleString('th-TH', { minimumFractionDigits: 2 })} บาท</span>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        ` : ''}
+
+                        ${data.cardImageUrl ? `
+                            <div class="text-center mt-3">
+                                <img src="${data.cardImageUrl}" class="img-fluid rounded-3 shadow-sm border" style="max-height: 280px;" alt="Balance Summary Card">
+                            </div>
+                        ` : ''}
+                    `;
+                } else {
+                    body.innerHTML = '<div class="alert alert-warning">ไม่สามารถโหลดข้อมูลสรุปยอดได้</div>';
+                }
+            } catch (err) {
+                body.innerHTML = `<div class="alert alert-danger">Error: ${err.message}</div>`;
+            }
+        }
+
+        // --- Recent Transactions Modal ---
+        async function openRecentModal() {
+            const modal = new bootstrap.Modal(document.getElementById('recentModal'));
+            modal.show();
+
+            const body = document.getElementById('recentModalBody');
+            body.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary"></div><div class="mt-2 text-muted">กำลังโหลดประวัติล่าสุด...</div></div>';
+
+            try {
+                const res = await fetch('/api/chat/recent');
+                const data = await res.json();
+
+                if (data.success && data.transactions && data.transactions.length > 0) {
+                    body.innerHTML = `
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0" style="font-size: 0.9rem;">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>วันเวลา</th>
+                                        <th>ประเภท</th>
+                                        <th>รายการ</th>
+                                        <th>หมวดหมู่</th>
+                                        <th>บัญชี</th>
+                                        <th class="text-end">จำนวนเงิน</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${data.transactions.map(t => {
+                                        const isInc = t.type === 'รายรับ';
+                                        return `
+                                            <tr>
+                                                <td class="text-muted small">${t.date || ''} ${t.time || ''}</td>
+                                                <td>
+                                                    <span class="badge ${isInc ? 'bg-success' : 'bg-danger'} rounded-pill">
+                                                        ${t.type}
+                                                    </span>
+                                                </td>
+                                                <td class="fw-medium">${escapeHtml(t.item)}</td>
+                                                <td><span class="badge bg-light text-dark border">${escapeHtml(t.category || '-')}</span></td>
+                                                <td class="text-muted small">${escapeHtml(t.account || 'เงินสด')}</td>
+                                                <td class="text-end fw-bold ${isInc ? 'text-success' : 'text-danger'}">
+                                                    ${isInc ? '+' : '-'}${Number(t.amount || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 })}
+                                                </td>
+                                            </tr>
+                                        `;
+                                    }).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    `;
+                } else {
+                    body.innerHTML = '<div class="text-center py-4 text-muted"><i class="bi bi-inbox fs-2 d-block mb-2"></i>ยังไม่มีประวัติรายการบันทึก</div>';
+                }
+            } catch (err) {
+                body.innerHTML = `<div class="alert alert-danger">Error: ${err.message}</div>`;
+            }
+        }
+
+        // --- Image Zoom Modal ---
+        function zoomImage(src) {
+            const modal = new bootstrap.Modal(document.getElementById('imageZoomModal'));
+            document.getElementById('zoomImageElement').src = src;
+            document.getElementById('zoomImageDownloadBtn').href = src;
+            modal.show();
+        }
+
+        // --- Local Storage Chat History ---
+        function saveChatHistory() {
+            try {
+                const chatMessages = document.getElementById('chatMessages');
+                if (chatMessages) {
+                    localStorage.setItem('devmus_chat_history_v1', chatMessages.innerHTML);
+                }
+            } catch (e) {}
+        }
+
+        function loadChatHistory() {
+            try {
+                const saved = localStorage.getItem('devmus_chat_history_v1');
+                const chatMessages = document.getElementById('chatMessages');
+                if (saved && chatMessages) {
+                    chatMessages.innerHTML = saved;
+                    scrollToBottomChat();
+                }
+            } catch (e) {}
+        }
+
+        function clearChatHistory() {
+            if (!confirm('ต้องการล้างประวัติการสนทนาในหน้าจอนี้หรือไม่?')) return;
+            localStorage.removeItem('devmus_chat_history_v1');
+            const chatMessages = document.getElementById('chatMessages');
+            if (chatMessages) {
+                chatMessages.innerHTML = `
+                    <div class="message-row bot">
+                        <div class="message-avatar bot"><i class="bi bi-robot"></i></div>
+                        <div class="message-bubble">
+                            <div class="fw-bold mb-1 text-primary">👋 สวัสดีค่ะ! ยินดีต้อนรับสู่ระบบบันทึกรายรับ-รายจ่าย</div>
+                            <div>คุณสามารถพิมพ์คุยภาษาธรรมชาติเพื่อบันทึกบัญชีได้ทันที เช่น:</div>
+                            <ul class="mb-2 mt-1 ps-3 small text-muted">
+                                <li><strong>รายจ่าย:</strong> <em>"กินข้าวมันไก่ 50"</em>, <em>"ซื้อของ 150"</em>, <em>"เติมน้ำมัน 800 กสิกร"</em></li>
+                                <li><strong>รายรับ:</strong> <em>"เงินเดือนเข้า 35,000"</em>, <em>"ขายของได้ 1,200"</em></li>
+                                <li><strong>ตรวจยอด:</strong> <em>"เช็คยอด"</em> หรือ <em>"เหลือเงินเท่าไหร่"</em></li>
+                                <li><strong>สแกนสลิป:</strong> กดปุ่มกล้องถ่ายรูป 📷 หรือลากรูปสลิปมาวางได้เลยค่ะ</li>
+                            </ul>
+                            <span class="message-time">เริ่มต้นใช้งาน</span>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
         // Initial load
         window.onload = () => {
+            loadChatHistory();
+            initDragAndDrop();
             loadCurrentConfig();
             checkSystemStatus();
+            checkTelegramStatus();
+            checkDialogflowStatus();
+            loadCategoriesAndRules();
         };
     </script>
+
+    <!-- Modal: เพิ่ม / แก้ไขหมวดหมู่ -->
+    <div class="modal fade" id="categoryModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="catModalTitle">เพิ่มหมวดหมู่ใหม่</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="catModalId">
+                    <div class="mb-3">
+                        <label class="form-label">ประเภท</label>
+                        <select id="catModalType" class="form-select">
+                            <option value="expense">รายจ่าย (Expense)</option>
+                            <option value="income">รายรับ (Income)</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">ชื่อหมวดหมู่หลัก (Value)</label>
+                        <input type="text" id="catModalName" class="form-control" placeholder="เช่น อาหารและเครื่องดื่ม, การเดินทาง">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">คำพ้องความหมาย / คีย์เวิร์ด (Synonyms)</label>
+                        <textarea id="catModalSynonyms" class="form-control" rows="4" placeholder="คั่นแต่ละคำด้วยเครื่องหมายจุลภาค (,) เช่น ข้าว, กาแฟ, ขนม, ชาบู, ส้มตำ, ชานม, ชาเขียว"></textarea>
+                        <div class="form-text">คำเหล่านี้จะถูกใช้ตรวจจับอัตโนมัติเมื่อผู้ใช้พิมพ์ หรือส่งขึ้น Dialogflow Entity Type</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ยกเลิก</button>
+                    <button type="button" class="btn btn-primary" onclick="saveCategoryFromModal()">
+                        <i class="bi bi-save"></i> บันทึกหมวดหมู่
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: ดู Entity Types ใน Dialogflow -->
+    <div class="modal fade" id="dfEntityTypesModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-cloud-check text-primary"></i> Entity Types ใน Dialogflow Agent</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="dfEntityTypesList">กำลังโหลดข้อมูล...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: สรุปยอดบัญชีคงเหลือ -->
+    <div class="modal fade" id="balanceModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content border-0 shadow rounded-4">
+                <div class="modal-header border-0 pb-0">
+                    <h5 class="modal-title fw-bold"><i class="bi bi-pie-chart-fill text-primary me-2"></i> สรุปยอดเงินคงเหลือ</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="balanceModalBody">
+                    <div class="text-center py-4">กำลังโหลด...</div>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">ปิด</button>
+                    <button type="button" class="btn btn-primary rounded-pill px-4" onclick="openBalanceModal()">
+                        <i class="bi bi-arrow-clockwise me-1"></i> อัปเดตยอด
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: ประวัติบันทึกล่าสุด -->
+    <div class="modal fade" id="recentModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content border-0 shadow rounded-4">
+                <div class="modal-header border-0">
+                    <h5 class="modal-title fw-bold"><i class="bi bi-clock-history text-primary me-2"></i> ประวัติรายการบันทึกล่าสุด</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-0" id="recentModalBody">
+                    <div class="text-center py-4">กำลังโหลด...</div>
+                </div>
+                <div class="modal-footer border-0">
+                    <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">ปิด</button>
+                    <button type="button" class="btn btn-primary rounded-pill px-4" onclick="openRecentModal()">
+                        <i class="bi bi-arrow-clockwise me-1"></i> รีเฟรช
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: ดูภาพการ์ดขนาดใหญ่ (Image Zoom) -->
+    <div class="modal fade" id="imageZoomModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content border-0 bg-transparent shadow-none">
+                <div class="modal-body p-0 text-center position-relative">
+                    <button type="button" class="btn btn-dark rounded-circle position-absolute top-0 end-0 m-3 shadow" data-bs-dismiss="modal" style="z-index: 10; width: 40px; height: 40px;">
+                        <i class="bi bi-x-lg"></i>
+                    </button>
+                    <img id="zoomImageElement" src="" class="img-fluid rounded-4 shadow-lg border" alt="Receipt Card Zoom">
+                    <div class="mt-3">
+                        <a id="zoomImageDownloadBtn" href="#" download="transaction-card.png" class="btn btn-primary rounded-pill px-4 shadow">
+                            <i class="bi bi-download me-1"></i> ดาวน์โหลดการ์ดรูปภาพ
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap Bundle with Popper -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

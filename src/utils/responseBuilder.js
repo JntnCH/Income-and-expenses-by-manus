@@ -1,29 +1,40 @@
 /**
  * Response Builder Utility
- * สร้างข้อความและ rich response สำหรับ Dialogflow integrations
+ * สร้างข้อความและรูปภาพตอบกลับสำหรับ Dialogflow ในรูปแบบต่างๆ
  */
 
 /**
- * สร้าง Dialogflow Fulfillment Response
- *
- * Dialogflow จะนำ image message นี้ไปแปลงเป็น image message ของ Telegram/LINE
- * เมื่อปลายทางเปิดใช้ integration ของ Dialogflow อยู่
+ * สร้าง Dialogflow Fulfillment Response พร้อมรองรับรูปภาพ
+ * @param {string} text - ข้อความตอบกลับ
+ * @param {string} [imageUrl] - URL รูปภาพการ์ดสรุปยอด/สลิป (ถ้ามี)
  */
-function buildDialogflowResponse(text, imageUri = null) {
+function buildDialogflowResponse(text, imageUrl = null) {
   const fulfillmentMessages = [
-    { text: { text: [String(text || '')] } }
+    {
+      text: { text: [text] }
+    }
   ];
 
-  if (typeof imageUri === 'string' && /^https:\/\//i.test(imageUri)) {
+  if (imageUrl) {
+    // 1. Standard Dialogflow Image Message
     fulfillmentMessages.push({
       image: {
-        imageUri,
-        accessibilityText: 'ภาพสรุปยอดการเงิน'
+        imageUri: imageUrl,
+        accessibilityText: 'DevMus Transaction Summary Card'
       }
     });
+
+    // 2. Platform-specific Custom Payloads (LINE / Telegram / Facebook)
+    // Removed because standard Dialogflow image response is supported natively
+    // across Telegram, LINE, and Facebook Messenger. Incorrect custom payloads
+    // can cause the platform integration to fail and drop the image.
   }
 
-  return { fulfillmentMessages };
+  return {
+    fulfillmentText: text,
+    fulfillmentMessages,
+    ...(imageUrl ? { imageUrl } : {})
+  };
 }
 
 /**
@@ -103,9 +114,10 @@ function buildBalanceSummary(summary) {
     itemsText = '- ยังไม่มีรายการวันนี้';
   }
 
+  // สร้างส่วนแสดงยอดแยกบัญชี
   let accountText = '';
   if (summary.accountBalances && summary.accountBalances.length > 0) {
-    accountText = '\n🏦 ยอดคงเหลือแต่ล่ะบัญชี\n' +
+    accountText = '\n🏦 ยอดคงเหลือแต่ล่ะบัญชี\n' + 
       summary.accountBalances
         .map(acc => ` - ${acc.name} : ${formatAmount(acc.amount)} บาท`)
         .join('\n');
@@ -119,12 +131,15 @@ function buildBalanceSummary(summary) {
     `💸 รายรับวันนี้  ${formatAmount(summary.dailyIncome)} บาท\n` +
     `🛍️ รายจ่ายวันนี้ ${formatAmount(summary.dailyExpense)} บาท\n` +
     `💰 รายรับเดือนนี้  ${formatAmount(summary.monthlyIncome)} บาท\n` +
-    `🛒 รายจ่ายเดือนนี้ ${formatAmount(summary.monthlyExpense)} บาท\n` +
+    `🛒 รายจ่ายเดือนนี้  ${formatAmount(summary.monthlyExpense)} บาท\n` +
     `${accountText}\n\n`+
     `🪙 ยอดรวมทุกบัญชี ${formatAmount(summary.balance)} บาท`
   );
 }
 
+/**
+ * จัดรูปแบบตัวเลขเงิน
+ */
 function formatAmount(amount) {
   return parseFloat(amount || 0).toLocaleString('th-TH', {
     minimumFractionDigits: 2,

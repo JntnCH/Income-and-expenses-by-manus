@@ -4,6 +4,8 @@ const multer = require('multer');
 const { processImage, getAvailableProviders } = require('../ocr/ocrManager');
 const { saveRecord } = require('../services/googleSheets');
 const { buildDialogflowResponse, buildOCRConfirmation } = require('../utils/responseBuilder');
+const { cacheCardPayload } = require('./imageCard');
+const { resolveCategory } = require('../services/categoryManager');
 
 // ตั้งค่า multer สำหรับรับไฟล์ภาพ (เก็บใน memory ไม่บันทึกลง disk)
 const upload = multer({
@@ -21,7 +23,7 @@ const upload = multer({
 
 /**
  * POST /api/ocr/scan
- * สแกนสลิป/ใบเสร็จและบันทึกลง Google Sheets อัตโนมัติ
+ * สแกนสลิป/ใบเสร็จและบันทึกลง Google Sheets อัตโนมัติ พร้อมส่งรูปการ์ดยืนยัน
  *
  * Body (multipart/form-data):
  *   - file: ไฟล์ภาพสลิป/ใบเสร็จ
@@ -44,20 +46,46 @@ router.post('/scan', upload.single('file'), async (req, res) => {
     // ประมวลผล OCR
     const ocrResult = await processImage(req.file.buffer, provider);
 
+    // แก้ไขหมวดหมู่ให้อัตโนมัติ (Resolve & Normalize Category)
+    const categoryResolution = resolveCategory({
+      item: ocrResult.item || '',
+      category: ocrResult.category,
+      type,
+      queryText: ocrResult.rawText || ''
+    });
+    const resolvedCategory = categoryResolution.resolvedCategory;
+    ocrResult.category = resolvedCategory;
+
     // บันทึกลง Google Sheets
     await saveRecord({
       item: ocrResult.item || 'สแกนจากสลิป/ใบเสร็จ',
       type,
       amount: ocrResult.amount || 0,
-      category: ocrResult.category || 'ทั่วไป',
+      category: resolvedCategory,
       note: `OCR:${provider || process.env.OCR_PROVIDER || 'tesseract'}`,
       platform,
       recorder
     });
 
+    let imageUrl = null;
+    try {
+      imageUrl = cacheCardPayload('transaction', {
+        type,
+        item: ocrResult.item || 'สแกนจากสลิป/ใบเสร็จ',
+        amount: ocrResult.amount || 0,
+        category: resolvedCategory,
+        account: 'สแกนสลิป',
+        recorder,
+        platform
+      }, req);
+    } catch (e) {
+      console.warn('[CARD WARN]', e.message);
+    }
+
     return res.json({
       success: true,
       message: 'บันทึกเรียบร้อยแล้ว',
+      imageUrl,
       ocr: ocrResult,
       saved: {
         item: ocrResult.item,
@@ -91,18 +119,43 @@ router.post('/scan-dialogflow', upload.single('file'), async (req, res) => {
 
     const ocrResult = await processImage(req.file.buffer, provider);
 
+    // แก้ไขหมวดหมู่ให้อัตโนมัติ (Resolve & Normalize Category)
+    const categoryResolution = resolveCategory({
+      item: ocrResult.item || '',
+      category: ocrResult.category,
+      type,
+      queryText: ocrResult.rawText || ''
+    });
+    const resolvedCategory = categoryResolution.resolvedCategory;
+    ocrResult.category = resolvedCategory;
+
     await saveRecord({
       item: ocrResult.item || 'สแกนจากสลิป/ใบเสร็จ',
       type,
       amount: ocrResult.amount || 0,
-      category: ocrResult.category || 'ทั่วไป',
+      category: resolvedCategory,
       note: `OCR:${provider || process.env.OCR_PROVIDER || 'tesseract'}`,
       platform,
       recorder
     });
 
+    let imageUrl = null;
+    try {
+      imageUrl = cacheCardPayload('transaction', {
+        type,
+        item: ocrResult.item || 'สแกนจากสลิป',
+        amount: ocrResult.amount || 0,
+        category: resolvedCategory,
+        account: 'สแกนสลิป',
+        recorder,
+        platform
+      }, req);
+    } catch (e) {
+      console.warn('[CARD WARN]', e.message);
+    }
+
     const responseText = buildOCRConfirmation(ocrResult, type);
-    return res.json(buildDialogflowResponse(responseText));
+    return res.json(buildDialogflowResponse(responseText, imageUrl));
 
   } catch (error) {
     console.error('[OCR DIALOGFLOW ERROR]', error.message);

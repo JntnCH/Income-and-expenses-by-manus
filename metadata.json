@@ -1,0 +1,10 @@
+{
+  "name": "Income & Expense Dialogflow Webhook",
+  "description": "ระบบบันทึกรายรับ-รายจ่ายผ่าน Telegram Bot และ Dialogflow Webhook พร้อม OCR สแกนสลิปและการ์ดสรุปยอด",
+  "requestFramePermissions": [
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

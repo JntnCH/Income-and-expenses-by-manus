@@ -1,0 +1,154 @@
+{
+  "accounts": {
+    "เงินสด": 39460,
+    "กสิกร": 27700,
+    "SCB": 15200,
+    "พร้อมเพย์": 3400
+  },
+  "transactions": [
+    {
+      "id": "tx_1789552529290",
+      "date": "16/9/2026",
+      "time": "16:55",
+      "item": "ข้าว",
+      "type": "รายจ่าย",
+      "amount": 60,
+      "category": "อาหารและเครื่องดื่ม",
+      "account": "เงินสด",
+      "platform": "Telegram Bot",
+      "recorder": "Telegram User"
+    },
+    {
+      "id": "tx_1789551810208",
+      "date": "16/9/2026",
+      "time": "16:43",
+      "item": "ข้าว",
+      "type": "รายจ่าย",
+      "amount": 60,
+      "category": "อาหารและเครื่องดื่ม",
+      "account": "เงินสด",
+      "platform": "Web Chat",
+      "recorder": "ผู้ใช้แชท"
+    },
+    {
+      "id": "tx_1789545675372",
+      "date": "16/9/2026",
+      "time": "15:01",
+      "type": "รายจ่าย",
+      "item": "ก๋วยเตี๋ยว",
+      "amount": 0,
+      "category": "อาหารและเครื่องดื่ม",
+      "account": "เงินสด",
+      "platform": "LINE",
+      "recorder": "LINE User"
+    },
+    {
+      "id": "tx_1789545581849",
+      "date": "16/9/2026",
+      "time": "14:59",
+      "item": "ข้าวมันไก่พิเศษ",
+      "type": "รายจ่าย",
+      "amount": 60,
+      "category": "อาหารและเครื่องดื่ม",
+      "account": "เงินสด",
+      "platform": "Web Chat",
+      "recorder": "ผู้ใช้แชท"
+    },
+    {
+      "id": "tx_1789545338006",
+      "date": "16/9/2026",
+      "time": "14:55",
+      "item": "เติมน้ำมัน",
+      "type": "รายจ่าย",
+      "amount": 800,
+      "category": "การเดินทาง",
+      "account": "กสิกร",
+      "platform": "Web Chat",
+      "recorder": "ผู้ใช้แชท"
+    },
+    {
+      "id": "tx_1789545337961",
+      "date": "16/9/2026",
+      "time": "14:55",
+      "item": "เงินเดือน",
+      "type": "รายรับ",
+      "amount": 35000,
+      "category": "เงินเดือน",
+      "account": "เงินสด",
+      "platform": "Web Chat",
+      "recorder": "ผู้ใช้แชท"
+    },
+    {
+      "id": "tx_1789545264388",
+      "date": "16/9/2026",
+      "time": "14:54",
+      "item": "เข้า 00",
+      "type": "รายรับ",
+      "amount": 350,
+      "category": "เงินเดือน",
+      "account": "เงินสด",
+      "platform": "Web Chat",
+      "recorder": "ผู้ใช้แชท"
+    },
+    {
+      "id": "tx_1789545264378",
+      "date": "16/9/2026",
+      "time": "14:54",
+      "item": "ของเซเว่น",
+      "type": "รายจ่าย",
+      "amount": 150,
+      "category": "อาหารและเครื่องดื่ม",
+      "account": "เงินสด",
+      "platform": "Web Chat",
+      "recorder": "ผู้ใช้แชท"
+    },
+    {
+      "id": "tx_1789545258772",
+      "date": "16/9/2026",
+      "time": "14:54",
+      "item": "ข้าวผัดกะเพรา",
+      "type": "รายจ่าย",
+      "amount": 60,
+      "category": "อาหารและเครื่องดื่ม",
+      "account": "เงินสด",
+      "platform": "Web Chat",
+      "recorder": "ผู้ใช้แชท"
+    },
+    {
+      "id": "tx_demo_1",
+      "date": "15/09/2026",
+      "time": "08:30",
+      "type": "รายรับ",
+      "item": "เงินเดือนประจำงวด",
+      "amount": 45000,
+      "category": "เงินเดือน",
+      "account": "กสิกร",
+      "recorder": "เจ้าของบัญชี",
+      "platform": "Web Chat"
+    },
+    {
+      "id": "tx_demo_2",
+      "date": "16/09/2026",
+      "time": "07:45",
+      "type": "รายจ่าย",
+      "item": "ข้าวมันไก่พิเศษ",
+      "amount": 60,
+      "category": "อาหารและเครื่องดื่ม",
+      "account": "เงินสด",
+      "recorder": "เจ้าของบัญชี",
+      "platform": "Web Chat"
+    },
+    {
+      "id": "tx_demo_3",
+      "date": "16/09/2026",
+      "time": "08:15",
+      "type": "รายจ่าย",
+      "item": "กาแฟอเมซอน",
+      "amount": 65,
+      "category": "อาหารและเครื่องดื่ม",
+      "account": "กสิกร",
+      "recorder": "เจ้าของบัญชี",
+      "platform": "Web Chat"
+    }
+  ]
+}

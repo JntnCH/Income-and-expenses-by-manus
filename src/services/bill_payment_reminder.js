@@ -30,7 +30,7 @@ app.get('/cron/check-bills', async (req, res) => {
 
     // ดึงข้อมูลจากไฟล์ที่ 1 แถบ "กำหนดจ่าย" ตั้งแต่แถวที่ 4 ลงไป
     const response = await sheets.spreadsheets.values.get({
-      spreadsheetId = process.env.MONTHLY_SPREADSHEET_ID || process.env.LOCAL_MONTHLY_SHEET_ID,
+      spreadsheetId: process.env.MONTHLY_SPREADSHEET_ID || process.env.LOCAL_MONTHLY_SHEET_ID,
       range: 'กำหนดจ่าย!B4:G',
     });
 
