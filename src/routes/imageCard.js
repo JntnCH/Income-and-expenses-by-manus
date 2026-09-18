@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const {
   createTransactionSvg,
   createBalanceSummarySvg,
+  createEditConfirmationSvg,
   createInvestmentSvg,
   renderSvgToPng
 } = require('../services/imageCardGenerator');
@@ -24,8 +25,9 @@ function cleanOldCache() {
  * Save card payload in cache and return a unique card URL
  */
 function cacheCardPayload(type, data, req) {
-  const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'http';
-  const host = req.get('host') || 'localhost:3000';
+  cleanOldCache();
+  const protocol = req?.headers?.['x-forwarded-proto'] || req?.protocol || 'http';
+  const host = req?.get?.('host') || 'localhost:3000';
   const baseUrl = `${protocol}://${host}/api/card/render`;
   
   const params = new URLSearchParams();
@@ -40,6 +42,19 @@ function cacheCardPayload(type, data, req) {
     if (data.formattedDate) params.append('date', data.formattedDate);
     if (data.summarySheet) params.append('summarySheet', data.summarySheet);
     if (data.accountBalances) params.append('accounts', JSON.stringify(data.accountBalances));
+    if (data.todayItems) params.append('todayItems', JSON.stringify(data.todayItems));
+  } else if (type === 'edit') {
+    const oldTx = data.oldTransaction || data.old || {};
+    const newTx = data.newTransaction || data.new || {};
+    params.append('oldItem', oldTx.item || data.oldItem || '');
+    params.append('oldAmount', oldTx.amount !== undefined ? oldTx.amount : (data.oldAmount || 0));
+    params.append('oldCategory', oldTx.category || data.oldCategory || '');
+    params.append('oldAccount', oldTx.account || data.oldAccount || '');
+    params.append('newItem', newTx.item || data.newItem || '');
+    params.append('newAmount', newTx.amount !== undefined ? newTx.amount : (data.newAmount || 0));
+    params.append('newCategory', newTx.category || data.newCategory || '');
+    params.append('newAccount', newTx.account || data.newAccount || '');
+    if (data.date || newTx.date) params.append('date', data.date || newTx.date);
   } else if (type === 'investment') {
     params.append('action', data.action || '');
     params.append('assetName', data.assetName || '');
@@ -77,6 +92,8 @@ router.get('/view/:id.png', async (req, res) => {
     let svg = '';
     if (item.type === 'balance') {
       svg = createBalanceSummarySvg(item.data);
+    } else if (item.type === 'edit') {
+      svg = createEditConfirmationSvg(item.data);
     } else if (item.type === 'investment') {
       svg = createInvestmentSvg(item.data);
     } else {
@@ -119,7 +136,15 @@ router.get('/render', async (req, res) => {
       assetType = 'คริปโต',
       quantity = '0',
       pricePerUnit = '0',
-      totalAmount = '0'
+      totalAmount = '0',
+      oldItem,
+      oldAmount = '0',
+      oldCategory,
+      oldAccount,
+      newItem,
+      newAmount = '0',
+      newCategory,
+      newAccount
     } = req.query;
 
     let svg = '';
@@ -132,6 +157,14 @@ router.get('/render', async (req, res) => {
           accountBalances = [];
         }
       }
+      let todayItems = [];
+      if (req.query.todayItems) {
+        try {
+          todayItems = JSON.parse(req.query.todayItems);
+        } catch (e) {
+          todayItems = [];
+        }
+      }
       svg = createBalanceSummarySvg({
         balance: parseFloat(balance),
         dailyIncome: parseFloat(dailyIncome),
@@ -139,8 +172,21 @@ router.get('/render', async (req, res) => {
         monthlyIncome: parseFloat(monthlyIncome),
         monthlyExpense: parseFloat(monthlyExpense),
         accountBalances,
+        todayItems,
         formattedDate: date || new Date().toLocaleDateString('th-TH'),
-        summarySheet: req.query.summarySheet || 'รายรับ-รายจ่าย'
+        summarySheet: req.query.summarySheet || 'BotDashboard'
+      });
+    } else if (type === 'edit') {
+      svg = createEditConfirmationSvg({
+        oldItem: oldItem || item,
+        oldAmount: parseFloat(oldAmount || amount),
+        oldCategory: oldCategory || category,
+        oldAccount: oldAccount || account,
+        newItem: newItem || oldItem || item,
+        newAmount: parseFloat(newAmount || amount),
+        newCategory: newCategory || oldCategory || category,
+        newAccount: newAccount || oldAccount || account,
+        date: date || new Date().toLocaleDateString('th-TH')
       });
     } else if (type === 'investment') {
       svg = createInvestmentSvg({
@@ -184,6 +230,8 @@ router.post('/generate', async (req, res) => {
     let svg = '';
     if (type === 'balance') {
       svg = createBalanceSummarySvg(data);
+    } else if (type === 'edit') {
+      svg = createEditConfirmationSvg(data);
     } else if (type === 'investment') {
       svg = createInvestmentSvg(data);
     } else {

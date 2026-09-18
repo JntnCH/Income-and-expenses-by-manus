@@ -12,9 +12,15 @@ const { processChatMessage, calculateLocalBalanceSummary, getRecentTransactions,
 const { processImage } = require('../ocr/ocrManager');
 const { resolveCategory, getCategoriesByType, addOrUpdateCategory, importFromDialogflow, exportToDialogflow, addCorrectionRule, getAllCategories } = require('./categoryManager');
 const { listEntityTypes, getEntityType, addOrUpdateEntityEntry, deleteEntityEntry } = require('./dialogflowEntityService');
-const { getBalanceSummary, saveRecord } = require('./googleSheets');
+const { getBalanceSummary, saveRecord, findTransaction, updateTransaction } = require('./googleSheets');
 const { cacheCardPayload } = require('../routes/imageCard');
-const { createTransactionSvg, createBalanceSummarySvg, renderSvgToPng } = require('./imageCardGenerator');
+const { createTransactionSvg, createBalanceSummarySvg, createEditConfirmationSvg, renderSvgToPng } = require('./imageCardGenerator');
+const {
+  buildBalanceSummary,
+  buildEditConfirmation,
+  buildMultipleMatchesResponse,
+  buildNotFoundResponse
+} = require('../utils/responseBuilder');
 
 const CONFIG_FILE = path.join(__dirname, '../../data/telegram_config.json');
 
@@ -348,6 +354,130 @@ async function handleBalanceRequest(chatId, req) {
 }
 
 /**
+ * จัดการคำสั่งแก้ไขรายการสำหรับ Telegram Bot
+ * รองรับ:
+ * - "แก้รายการซื้อกาแฟ 41 เป็น 50"
+ * - "แก้ซื้อกาแฟเป็นซื้อขนม"
+ * - "แก้รายการเดินทาง 195 เป็น 200"
+ * - "แก้หมวดหมู่ซื้อกาแฟเป็นอาหาร"
+ * - "แก้บัญชีซื้อกาแฟเป็นกสิกรไทย"
+ * - "/edit ซื้อกาแฟ 41 เป็น 50"
+ * 
+ * Flow:
+ * updateTransaction() -> buildEditConfirmation() -> createEditConfirmationSvg() -> sendPhoto()
+ * ถ้าเกิด Image Error -> sendMessage() (Fallback ทันที)
+ */
+async function handleEditRequest(chatId, text, req) {
+  await sendChatAction(chatId, 'typing');
+
+  const clean = text.replace(/^\/edit\s*/i, '').trim();
+
+  let oldItem = null;
+  let oldAmount = null;
+  let newItem = null;
+  let newAmount = null;
+  let newCategory = null;
+  let newAccount = null;
+
+  // Pattern 1: แก้บัญชี (ของ) X เป็น Y
+  const accMatch = clean.match(/^แก้บัญชี(?:ของ)?(?:รายการ)?\s*(.+?)\s*เป็น\s*(.+)/i);
+  if (accMatch) {
+    oldItem = accMatch[1].trim();
+    newAccount = accMatch[2].trim();
+  }
+
+  // Pattern 2: แก้หมวดหมู่ (ของ) X เป็น Y
+  const catMatch = clean.match(/^แก้หมวด(?:หมู่)?(?:ของ)?(?:รายการ)?\s*(.+?)\s*เป็น\s*(.+)/i);
+  if (catMatch) {
+    oldItem = catMatch[1].trim();
+    newCategory = catMatch[2].trim();
+  }
+
+  // Pattern 3: แก้ (รายการ) [ชื่อ] [จำนวนเดิม] เป็น [จำนวนใหม่]
+  const numToNumMatch = clean.match(/^แก้(?:รายการ)?\s*(.+?)\s*(\d+(?:\.\d+)?)\s*(?:เป็น|->|=)\s*(\d+(?:\.\d+)?)/i);
+  if (numToNumMatch) {
+    oldItem = numToNumMatch[1].trim();
+    oldAmount = parseFloat(numToNumMatch[2]);
+    newAmount = parseFloat(numToNumMatch[3]);
+  }
+
+  // Pattern 4: แก้ (รายการ) [ชื่อ] เป็น [ใหม่]
+  const genericMatch = clean.match(/^แก้(?:รายการ)?\s*(.+?)\s*(?:เป็น|->|=)\s*(.+)/i);
+  if (genericMatch && !numToNumMatch && !accMatch && !catMatch) {
+    oldItem = genericMatch[1].trim();
+    const targetVal = genericMatch[2].trim();
+    if (!isNaN(parseFloat(targetVal))) {
+      newAmount = parseFloat(targetVal);
+    } else {
+      newItem = targetVal;
+    }
+  }
+
+  if (!oldItem && !newAmount && !newItem && !newCategory && !newAccount) {
+    const rawParts = clean.split(/\s+/);
+    oldItem = rawParts[0];
+  }
+
+  const criteria = {
+    oldItem,
+    oldAmount
+  };
+
+  const updates = {
+    newItem,
+    newAmount,
+    newCategory,
+    newAccount,
+    platform: 'Telegram',
+    recorder: 'Telegram User'
+  };
+
+  try {
+    const matches = await findTransaction(criteria);
+
+    if (matches.length === 0) {
+      const notFoundText = buildNotFoundResponse(criteria);
+      await sendMessage(chatId, notFoundText, { reply_markup: getMainInlineKeyboard() });
+      return;
+    }
+
+    if (matches.length > 1) {
+      const multiText = buildMultipleMatchesResponse(matches);
+      await sendMessage(chatId, multiText, { reply_markup: getMainInlineKeyboard() });
+      return;
+    }
+
+    // Exactly 1 match found -> Update in-place and verify!
+    const targetMatch = matches[0];
+    const editResult = await updateTransaction(targetMatch.rowIndex, updates);
+    const confirmationText = buildEditConfirmation(editResult);
+
+    // Primary: Send Photo
+    try {
+      const svg = createEditConfirmationSvg(editResult);
+      const pngBuffer = await renderSvgToPng(svg);
+      await sendPhoto(chatId, pngBuffer, confirmationText, {
+        reply_markup: getMainInlineKeyboard()
+      });
+      return;
+    } catch (imgErr) {
+      console.warn('[TELEGRAM EDIT IMAGE WARN]', imgErr.message);
+    }
+
+    // Fallback: Send Text message
+    await sendMessage(chatId, confirmationText, {
+      reply_markup: getMainInlineKeyboard()
+    });
+
+  } catch (err) {
+    console.error('[TELEGRAM EDIT ERROR]', err.message);
+    await sendMessage(chatId, `❌ การแก้ไขรายการล้มเหลว: ${err.message}`, {
+      reply_markup: getMainInlineKeyboard()
+    });
+  }
+}
+
+/**
  * ดึงรายการบันทึกล่าสุด
  */
 async function handleRecentRequest(chatId) {
@@ -563,6 +693,11 @@ async function handleTextMessage(message, req) {
 
   if (text.startsWith('/categories') || text.startsWith('/category') || text === 'หมวดหมู่' || text === 'จัดการหมวดหมู่') {
     await handleCategoriesMenu(chatId);
+    return;
+  }
+
+  if (text.startsWith('/edit') || text.startsWith('แก้')) {
+    await handleEditRequest(chatId, text, req);
     return;
   }
 

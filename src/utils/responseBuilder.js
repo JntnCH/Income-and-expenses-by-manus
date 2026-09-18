@@ -1,6 +1,6 @@
 /**
  * Response Builder Utility
- * สร้างข้อความและรูปภาพตอบกลับสำหรับ Dialogflow ในรูปแบบต่างๆ
+ * สร้างข้อความและรูปภาพตอบกลับสำหรับ Dialogflow และ Telegram ในรูปแบบต่างๆ
  */
 
 /**
@@ -16,18 +16,12 @@ function buildDialogflowResponse(text, imageUrl = null) {
   ];
 
   if (imageUrl) {
-    // 1. Standard Dialogflow Image Message
     fulfillmentMessages.push({
       image: {
         imageUri: imageUrl,
         accessibilityText: 'DevMus Transaction Summary Card'
       }
     });
-
-    // 2. Platform-specific Custom Payloads (LINE / Telegram / Facebook)
-    // Removed because standard Dialogflow image response is supported natively
-    // across Telegram, LINE, and Facebook Messenger. Incorrect custom payloads
-    // can cause the platform integration to fail and drop the image.
   }
 
   return {
@@ -43,8 +37,8 @@ function buildDialogflowResponse(text, imageUrl = null) {
 function buildTransactionConfirmation(type, item, amount, category, account) {
   return `📝 ฉันบันทึก ${item}\n` +
          `📂 ประเภท : ${type}\n` +
-         `📦 หมวดหมู่ : ${category}\n` +
-         `💳 บัญชี : ${account || 'เงินสด'} \n` +
+         `📦 หมวดหมู่ : ${category || 'ทั่วไป'}\n` +
+         `💳 บัญชี : ${account || 'เงินสด'}\n` +
          `💵 จำนวน ${formatAmount(amount)} บาท\n` +
          `✅ ให้คุณเรียบร้อยแล้ว`;
 }
@@ -101,40 +95,107 @@ function buildSellInvestmentConfirmation(assetName, assetType, quantity, pricePe
 }
 
 /**
- * สรุปยอดคงเหลือ ตามรูปแบบที่ผู้ใช้ต้องการ
- * เพิ่ม: การแสดงผลยอดแยกตามบัญชี (Account Balances)
+ * สรุปยอดคงเหลือ แยก 2 ส่วนชัดเจนตามข้อกำหนด
+ * ส่วนที่ 1: รายการวันนี้ + สรุปยอดรายรับ-รายจ่าย (ประจำวันและประจำเดือน)
+ * ส่วนที่ 2: ยอดคงเหลือแต่ละบัญชี + ยอดรวมทุกบัญชี
  */
 function buildBalanceSummary(summary) {
+  // --- ส่วนที่ 1: รายการวันนี้ + สรุปยอด ---
   let itemsText = '';
   if (summary.todayItems && summary.todayItems.length > 0) {
     itemsText = summary.todayItems
-      .map(i => `- ${i.item} ${formatAmount(i.amount)} บาท`)
+      .map(i => {
+        const sign = i.type === 'รายรับ' ? '+' : '-';
+        return `- ${i.item} ${sign}${formatAmount(i.amount)} บาท`;
+      })
       .join('\n');
   } else {
     itemsText = '- ยังไม่มีรายการวันนี้';
   }
 
-  // สร้างส่วนแสดงยอดแยกบัญชี
+  const section1 = [
+    `📅 ยอดประจำวันที่ ${summary.formattedDate}`,
+    `📋 ข้อมูลจากชีต : ${summary.summarySheet || 'BotDashboard'}`,
+    '',
+    `📝 รายการวันนี้`,
+    itemsText,
+    '',
+    `💸 รายรับวันนี้  ${formatAmount(summary.dailyIncome)} บาท`,
+    `🛍️ รายจ่ายวันนี้ ${formatAmount(summary.dailyExpense)} บาท`,
+    '',
+    `💰 รายรับเดือนนี้  ${formatAmount(summary.monthlyIncome)} บาท`,
+    `🛒 รายจ่ายเดือนนี้  ${formatAmount(summary.monthlyExpense)} บาท`
+  ].join('\n');
+
+  // --- ส่วนที่ 2: ยอดคงเหลือแต่ละบัญชี ---
   let accountText = '';
   if (summary.accountBalances && summary.accountBalances.length > 0) {
-    accountText = '\n🏦 ยอดคงเหลือแต่ล่ะบัญชี\n' + 
-      summary.accountBalances
-        .map(acc => ` - ${acc.name} : ${formatAmount(acc.amount)} บาท`)
-        .join('\n');
+    accountText = summary.accountBalances
+      .map(acc => `- ${acc.name} : ${formatAmount(acc.amount)} บาท`)
+      .join('\n');
+  } else {
+    accountText = '- ไม่มีข้อมูลบัญชี';
   }
 
-  return (
-    `📅 ยอดประจำวันที่ ${summary.formattedDate}\n` +
-    `📋 ข้อมูลจากชีต : ${summary.summarySheet}\n\n` +
-    `📝 รายการวันนี้\n` +
-    `${itemsText}\n\n` +
-    `💸 รายรับวันนี้  ${formatAmount(summary.dailyIncome)} บาท\n` +
-    `🛍️ รายจ่ายวันนี้ ${formatAmount(summary.dailyExpense)} บาท\n` +
-    `💰 รายรับเดือนนี้  ${formatAmount(summary.monthlyIncome)} บาท\n` +
-    `🛒 รายจ่ายเดือนนี้  ${formatAmount(summary.monthlyExpense)} บาท\n` +
-    `${accountText}\n\n`+
+  const section2 = [
+    `🏦 ยอดคงเหลือแต่ละบัญชี`,
+    accountText,
+    '',
     `🪙 ยอดรวมทุกบัญชี ${formatAmount(summary.balance)} บาท`
-  );
+  ].join('\n');
+
+  return `${section1}\n\n------------------------------\n\n${section2}`;
+}
+
+/**
+ * ยืนยันการแก้ไขรายการ (Edit Confirmation)
+ */
+function buildEditConfirmation(editResult) {
+  const oldTx = editResult.oldTransaction || {};
+  const newTx = editResult.newTransaction || {};
+
+  let text = `✏️ แก้ไขรายการเรียบร้อยแล้ว\n\n` +
+             `📋 ข้อมูลเดิม:\n` +
+             `• รายการ: ${oldTx.item || 'ไม่ระบุ'}\n` +
+             `• จำนวนเงิน: ${formatAmount(oldTx.amount)} บาท\n`;
+  if (oldTx.category) text += `• หมวดหมู่: ${oldTx.category}\n`;
+  if (oldTx.account) text += `• บัญชี: ${oldTx.account}\n`;
+
+  text += `\n✨ ข้อมูลใหม่:\n` +
+          `• รายการ: ${newTx.item || 'ไม่ระบุ'}\n` +
+          `• จำนวนเงิน: ${formatAmount(newTx.amount)} บาท\n`;
+  if (newTx.category) text += `• หมวดหมู่: ${newTx.category}\n`;
+  if (newTx.account) text += `• บัญชี: ${newTx.account}\n`;
+
+  text += `\n✅ บันทึกการแก้ไขลง Google Sheets เรียบร้อยแล้ว`;
+  if (newTx.transactionId) {
+    text += `\n🆔 Transaction ID: ${newTx.transactionId}`;
+  }
+
+  return text;
+}
+
+/**
+ * เมื่อพบรายการที่เข้าเงื่อนไขมากกว่า 1 รายการ (ห้ามสุ่ม ให้ผู้ใช้เลือก)
+ */
+function buildMultipleMatchesResponse(matches) {
+  let text = `⚠️ พบรายการที่ตรงกับเงื่อนไข ${matches.length} รายการ กรุณาระบุให้ชัดเจนขึ้น หรือระบุ Transaction ID ค่ะ:\n\n`;
+  matches.slice(0, 5).forEach((m, idx) => {
+    text += `${idx + 1}) [ID: ${m.transactionId || m.rowIndex}] ${m.date} - ${m.item} ${formatAmount(m.amount)} บาท (${m.account || 'เงินสด'})\n`;
+  });
+  text += `\n💡 ตัวอย่างการสั่ง: "แก้รายการ ID ${matches[0].transactionId || matches[0].rowIndex} เป็น 50"`;
+  return text;
+}
+
+/**
+ * เมื่อค้นหาแล้วไม่พบรายการ
+ */
+function buildNotFoundResponse(criteria = {}) {
+  const queryItem = criteria.oldItem || criteria.item || '';
+  const queryAmount = criteria.oldAmount || criteria.amount || '';
+  let hint = queryItem ? ` "${queryItem}"` : '';
+  if (queryAmount) hint += ` จำนวน ${formatAmount(queryAmount)} บาท`;
+  return `❌ ไม่พบรายการ${hint} ในสเปรดชีต กรุณาตรวจสอบชื่อรายการหรือจำนวนเงินอีกครั้งค่ะ`;
 }
 
 /**
@@ -149,11 +210,15 @@ function formatAmount(amount) {
 
 module.exports = {
   buildDialogflowResponse,
+  buildTransactionConfirmation,
   buildIncomeConfirmation,
   buildExpenseConfirmation,
   buildOCRConfirmation,
   buildBuyInvestmentConfirmation,
   buildSellInvestmentConfirmation,
   buildBalanceSummary,
+  buildEditConfirmation,
+  buildMultipleMatchesResponse,
+  buildNotFoundResponse,
   formatAmount
 };

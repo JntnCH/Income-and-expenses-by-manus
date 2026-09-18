@@ -1,6 +1,12 @@
 const express = require('express');
 const router = express.Router();
-const { saveRecord, saveInvestmentRecord, getBalanceSummary } = require("../services/googleSheets");
+const {
+  saveRecord,
+  saveInvestmentRecord,
+  getBalanceSummary,
+  findTransaction,
+  updateTransaction
+} = require("../services/googleSheets");
 const { queryExcelData } = require("../services/excelQueryService");
 const { extractUser, formatUserLabel } = require('../utils/userExtractor');
 const { cacheCardPayload } = require('./imageCard');
@@ -13,8 +19,124 @@ const {
   buildExpenseConfirmation,
   buildBuyInvestmentConfirmation,
   buildSellInvestmentConfirmation,
-  buildBalanceSummary
+  buildBalanceSummary,
+  buildEditConfirmation,
+  buildMultipleMatchesResponse,
+  buildNotFoundResponse
 } = require('../utils/responseBuilder');
+
+/**
+ * Helper to extract value from Dialogflow parameter that could be String, Number, Object, or Array
+ */
+function extractParamValue(val) {
+  if (val === undefined || val === null) return null;
+  if (typeof val === 'number') return val;
+  if (typeof val === 'string') return val.trim();
+  if (Array.isArray(val)) {
+    if (val.length === 0) return null;
+    return extractParamValue(val[0]);
+  }
+  if (typeof val === 'object') {
+    if (val.amount !== undefined) return val.amount;
+    if (val.number !== undefined) return val.number;
+    if (val.name !== undefined) return val.name;
+    if (val.item !== undefined) return val.item;
+    if (val.text !== undefined) return val.text;
+    return JSON.stringify(val);
+  }
+  return String(val);
+}
+
+/**
+ * Helper to parse edit parameters from Dialogflow parameters or raw queryText
+ */
+function parseEditParameters(parameters = {}, queryText = '') {
+  const p = parameters;
+  
+  // transactionId
+  const transactionId = extractParamValue(p.transactionId || p.transId || p.txId || p.id || p['รหัสรายการ']);
+
+  // วันที่
+  const date = extractParamValue(p.date || p['date-time'] || p['วันที่'] || p.date_old);
+
+  // ประเภท
+  const type = extractParamValue(p.type || p['ประเภท'] || p.transType);
+
+  // รายการเดิม
+  let oldItem = extractParamValue(p.oldItem || p['รายการเดิม'] || p.item_old || p.item_before || p.item);
+
+  // จำนวนเงินเดิม
+  let oldAmount = extractParamValue(p.oldAmount || p['จำนวนเงินเดิม'] || p.amount_old || p.amount_before);
+
+  // รายละเอียดใหม่ / รายการใหม่
+  let newItem = extractParamValue(p.newItem || p['รายละเอียดใหม่'] || p['รายการใหม่'] || p.item_new || p.new_item);
+
+  // จำนวนเงินใหม่
+  let newAmount = extractParamValue(p.newAmount || p['จำนวนเงินใหม่'] || p.amount_new || p.new_amount || p['unit-currency'] || p.number);
+
+  // หมวดหมู่ใหม่
+  let newCategory = extractParamValue(p.newCategory || p['หมวดหมู่ใหม่'] || p.category_new || p['Expense-category'] || p.category);
+
+  // บัญชีใหม่
+  let newAccount = extractParamValue(p.newAccount || p['บัญชีใหม่'] || p.account_new || p.account);
+
+  // หมวดหมู่เดิม / บัญชีเดิม
+  const oldCategory = extractParamValue(p.oldCategory || p['หมวดหมู่เดิม']);
+  const oldAccount = extractParamValue(p.oldAccount || p['บัญชีเดิม']);
+
+  // Fallback parsing from queryText
+  if (queryText) {
+    const q = queryText.trim();
+
+    // 1. แก้บัญชี (ของ) (รายการ) X เป็น Y
+    const accMatch = q.match(/แก้บัญชี(?:ของ)?(?:รายการ)?\s*(.+?)\s*เป็น\s*(.+)/i);
+    if (accMatch) {
+      if (!oldItem) oldItem = accMatch[1].trim();
+      if (!newAccount) newAccount = accMatch[2].trim();
+    }
+
+    // 2. แก้หมวดหมู่ (ของ) (รายการ) X เป็น Y
+    const catMatch = q.match(/แก้หมวด(?:หมู่)?(?:ของ)?(?:รายการ)?\s*(.+?)\s*เป็น\s*(.+)/i);
+    if (catMatch) {
+      if (!oldItem) oldItem = catMatch[1].trim();
+      if (!newCategory) newCategory = catMatch[2].trim();
+    }
+
+    // 3. แก้ (รายการ) [ชื่อรายการ] [จำนวนเดิม] เป็น [จำนวนใหม่]
+    const numToNumMatch = q.match(/แก้(?:รายการ)?\s*(.+?)\s*(\d+(?:\.\d+)?)\s*(?:เป็น|->|=)\s*(\d+(?:\.\d+)?)/i);
+    if (numToNumMatch) {
+      if (!oldItem) oldItem = numToNumMatch[1].trim();
+      if (oldAmount === null) oldAmount = parseFloat(numToNumMatch[2]);
+      if (newAmount === null) newAmount = parseFloat(numToNumMatch[3]);
+    }
+
+    // 4. แก้ (รายการ) [ชื่อรายการ] เป็น [ชื่อใหม่ หรือ ตัวเลขใหม่]
+    const genericMatch = q.match(/แก้(?:รายการ)?\s*(.+?)\s*(?:เป็น|->|=)\s*(.+)/i);
+    if (genericMatch && !numToNumMatch && !accMatch && !catMatch) {
+      if (!oldItem) oldItem = genericMatch[1].trim();
+      const targetVal = genericMatch[2].trim();
+      if (!isNaN(parseFloat(targetVal))) {
+        if (newAmount === null) newAmount = parseFloat(targetVal);
+      } else {
+        if (!newItem) newItem = targetVal;
+      }
+    }
+  }
+
+  return {
+    transactionId,
+    date,
+    type,
+    oldItem,
+    oldAmount,
+    newItem,
+    newAmount,
+    newCategory,
+    newAccount,
+    oldCategory,
+    oldAccount
+  };
+}
 
 /**
  * POST /webhook/dialogflow
@@ -38,44 +160,23 @@ router.post('/dialogflow', async (req, res) => {
     console.log(`[DIALOGFLOW] Intent: ${intentName} | Query: "${queryText}"`);
     console.log(`[DIALOGFLOW] Parameters:`, JSON.stringify(parameters));
 
-    // ============================================================
-    // ดึงค่า parameters พื้นฐาน
-    // ============================================================
-    const amount = extractAmount(parameters);
-    
-    // ดึงหมวดหมู่จาก Entity (Income_category หรือ Expense-category)
-    const incomeCategory = extractEntity(parameters, ['Income_category', 'income_category']);
-    const expenseCategory = extractEntity(parameters, ['Expense-category', 'expense-category']);
-    
-    // ดึงค่า Account (เช่น กสิกร, เงินสด, SCB)
-    const account = extractEntity(parameters, ['account', 'Account', 'bank']) || 'เงินสด';
-
-    // ดึงชื่อรายการ (item)
-    let item = parameters.item || 
-               parameters.Income_categoryoriginal || 
-               parameters['Expense-categoryoriginal'] || 
-               incomeCategory || 
-               expenseCategory || 
-               'ไม่ระบุ';
-
     let responseText = '';
     let imageUrl = null;
 
+    const amount = extractAmount(parameters);
+    const item = extractEntity(parameters, ['item', 'item-name', 'description']) || 'ไม่ระบุ';
+    const account = extractEntity(parameters, ['account', 'bank-account', 'payment-method']) || 'เงินสด';
+
     switch (intentName) {
       case 'บันทึกรายรับ': {
-        // แก้ไขหมวดหมู่เวลาบันทึกข้อมูลไม่ตรง (Resolve & Normalize Category)
-        const resolution = resolveCategory({
+        const rawCategory = extractEntity(parameters, ['Income-category', 'category']) || null;
+        const categoryResolution = resolveCategory({
           item,
-          category: incomeCategory,
+          category: rawCategory,
           type: 'รายรับ',
           queryText
         });
-        const category = resolution.resolvedCategory;
-        if (item === 'ไม่ระบุ' && resolution.matchedKeyword) {
-          item = resolution.matchedKeyword;
-        }
-
-        console.log(`[CATEGORY RESOLVED] รายรับ | Raw: "${incomeCategory}" -> Final: "${category}" (${resolution.method})`);
+        const category = categoryResolution.resolvedCategory;
 
         try {
           await saveRecord({
@@ -90,8 +191,8 @@ router.post('/dialogflow', async (req, res) => {
         } catch (sheetErr) {
           console.warn('[SHEETS WARN] Saving to local chat ledger:', sheetErr.message);
           chatService.recordTransaction({
-            type: 'รายรับ',
             item,
+            type: 'รายรับ',
             amount,
             category,
             account,
@@ -99,7 +200,9 @@ router.post('/dialogflow', async (req, res) => {
             recorder: recorderLabel
           });
         }
+
         responseText = buildIncomeConfirmation(item, amount, category, account);
+
         try {
           imageUrl = cacheCardPayload('transaction', {
             type: 'รายรับ',
@@ -117,19 +220,14 @@ router.post('/dialogflow', async (req, res) => {
       }
 
       case 'บันทึกรายจ่าย': {
-        // แก้ไขหมวดหมู่เวลาบันทึกข้อมูลไม่ตรง (Resolve & Normalize Category)
-        const resolution = resolveCategory({
+        const rawCategory = extractEntity(parameters, ['Expense-category', 'category']) || null;
+        const categoryResolution = resolveCategory({
           item,
-          category: expenseCategory,
+          category: rawCategory,
           type: 'รายจ่าย',
           queryText
         });
-        const category = resolution.resolvedCategory;
-        if (item === 'ไม่ระบุ' && resolution.matchedKeyword) {
-          item = resolution.matchedKeyword;
-        }
-
-        console.log(`[CATEGORY RESOLVED] รายจ่าย | Raw: "${expenseCategory}" -> Final: "${category}" (${resolution.method})`);
+        const category = categoryResolution.resolvedCategory;
 
         try {
           await saveRecord({
@@ -144,8 +242,8 @@ router.post('/dialogflow', async (req, res) => {
         } catch (sheetErr) {
           console.warn('[SHEETS WARN] Saving to local chat ledger:', sheetErr.message);
           chatService.recordTransaction({
-            type: 'รายจ่าย',
             item,
+            type: 'รายจ่าย',
             amount,
             category,
             account,
@@ -153,7 +251,9 @@ router.post('/dialogflow', async (req, res) => {
             recorder: recorderLabel
           });
         }
+
         responseText = buildExpenseConfirmation(item, amount, category, account);
+
         try {
           imageUrl = cacheCardPayload('transaction', {
             type: 'รายจ่าย',
@@ -166,6 +266,62 @@ router.post('/dialogflow', async (req, res) => {
           }, req);
         } catch (e) {
           console.warn('[CARD WARN]', e.message);
+        }
+        break;
+      }
+
+      case 'แก้ไขรายการ':
+      case 'EditTransaction':
+      case 'updateTransaction':
+      case 'แก้ไข': {
+        const parsedParams = parseEditParameters(parameters, queryText);
+        console.log('[EDIT PARAMS]', JSON.stringify(parsedParams));
+
+        const criteria = {
+          transactionId: parsedParams.transactionId,
+          date: parsedParams.date,
+          type: parsedParams.type,
+          oldItem: parsedParams.oldItem,
+          oldAmount: parsedParams.oldAmount,
+          oldCategory: parsedParams.oldCategory,
+          oldAccount: parsedParams.oldAccount
+        };
+
+        const updates = {
+          newItem: parsedParams.newItem,
+          newAmount: parsedParams.newAmount,
+          newCategory: parsedParams.newCategory,
+          newAccount: parsedParams.newAccount,
+          newType: parsedParams.type,
+          newDate: parsedParams.date,
+          platform: userInfo.platform,
+          recorder: recorderLabel
+        };
+
+        try {
+          const matches = await findTransaction(criteria);
+          console.log(`[EDIT MATCHES] Found ${matches.length} matching rows`);
+
+          if (matches.length === 0) {
+            responseText = buildNotFoundResponse(criteria);
+          } else if (matches.length > 1) {
+            responseText = buildMultipleMatchesResponse(matches);
+          } else {
+            // Found exactly 1 match -> Update in-place & verify
+            const targetMatch = matches[0];
+            const editResult = await updateTransaction(targetMatch.rowIndex, updates);
+            
+            responseText = buildEditConfirmation(editResult);
+
+            try {
+              imageUrl = cacheCardPayload('edit', editResult, req);
+            } catch (cardErr) {
+              console.warn('[CARD WARN]', cardErr.message);
+            }
+          }
+        } catch (editErr) {
+          console.error('[EDIT ERROR]', editErr.message);
+          responseText = `❌ การแก้ไขรายการล้มเหลว: ${editErr.message}`;
         }
         break;
       }
@@ -235,10 +391,10 @@ router.post('/dialogflow', async (req, res) => {
       }
 
       case 'QueryExcel': {
-        const queryText = parameters.query || body?.queryResult?.queryText;
-        if (queryText) {
+        const queryTextParam = parameters.query || body?.queryResult?.queryText;
+        if (queryTextParam) {
           try {
-            responseText = await queryExcelData(queryText);
+            responseText = await queryExcelData(queryTextParam);
           } catch (err) {
             console.error('[QUERY ERROR]', err.message);
             responseText = `❌ AI ไม่สามารถวิเคราะห์ข้อมูลได้: ${err.message}`;
@@ -251,13 +407,50 @@ router.post('/dialogflow', async (req, res) => {
 
       default: {
         // Fallback or unhandled intents
-        // ตรวจสอบว่าเป็นคำสั่งจัดการ Entity (เช่น /entity) หรือไม่
         if (queryText && (queryText.toLowerCase().startsWith('/entity') || queryText.toLowerCase().startsWith('/หมวดหมู่'))) {
           try {
             const chatResult = await chatService.processChatMessage(queryText, { req, recorder: recorderLabel, platform: userInfo.platform });
             responseText = chatResult.text;
           } catch (err) {
             responseText = `❌ ข้อผิดพลาดคำสั่ง Entity: ${err.message}`;
+          }
+        } else if (queryText && queryText.trim().startsWith('แก้')) {
+          // Fallback intent for editing if Dialogflow doesn't match named intent
+          const parsedParams = parseEditParameters(parameters, queryText);
+          const criteria = {
+            transactionId: parsedParams.transactionId,
+            date: parsedParams.date,
+            type: parsedParams.type,
+            oldItem: parsedParams.oldItem,
+            oldAmount: parsedParams.oldAmount
+          };
+          const updates = {
+            newItem: parsedParams.newItem,
+            newAmount: parsedParams.newAmount,
+            newCategory: parsedParams.newCategory,
+            newAccount: parsedParams.newAccount,
+            platform: userInfo.platform,
+            recorder: recorderLabel
+          };
+
+          try {
+            const matches = await findTransaction(criteria);
+            if (matches.length === 0) {
+              responseText = buildNotFoundResponse(criteria);
+            } else if (matches.length > 1) {
+              responseText = buildMultipleMatchesResponse(matches);
+            } else {
+              const targetMatch = matches[0];
+              const editResult = await updateTransaction(targetMatch.rowIndex, updates);
+              responseText = buildEditConfirmation(editResult);
+              try {
+                imageUrl = cacheCardPayload('edit', editResult, req);
+              } catch (e) {
+                console.warn('[CARD WARN]', e.message);
+              }
+            }
+          } catch (e) {
+            responseText = `❌ การแก้ไขรายการล้มเหลว: ${e.message}`;
           }
         } else {
           responseText = `ขออภัยค่ะ ฉันได้รับ Intent "${intentName}" แต่ยังไม่ได้ตั้งค่าการทำงานใน Webhook`;
