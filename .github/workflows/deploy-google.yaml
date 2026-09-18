@@ -47,19 +47,26 @@ jobs:
         flags: --allow-unauthenticated --port=8080 --min-instances=0
         env_vars: |
           NODE_ENV=production
-          GOOGLE_SPREADSHEET_ID=${{ secrets.GOOGLE_SPREADSHEET_ID }}
-          MONTHLY_SPREADSHEET_ID=${{ secrets.MONTHLY_SPREADSHEET_ID }}
-          DEBT_SPREADSHEET_ID=${{ secrets.DEBT_SPREADSHEET_ID }}
-          GOOGLE_SHEET_NAME=${{ secrets.GOOGLE_SHEET_NAME }}
-          GOOGLE_INVEST_SHEET_NAME=${{ secrets.GOOGLE_INVEST_SHEET_NAME }}
-          GOOGLE_BOTDASHBOARD_SHEET_NAME=${{ secrets.GOOGLE_BOTDASHBOARD_SHEET_NAME }}
-          TELEGRAM_TOKEN=${{ secrets.TELEGRAM_TOKEN }}
-          MY_TELEGRAM_CHAT_ID=${{ secrets.MY_TELEGRAM_CHAT_ID }}
-          OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+          CORS_ORIGINS=https://income-and-expenses-by-manus.vercel.app,https://income-expense-docker-274212739997.asia-southeast3.run.app
           DIALOGFLOW_PROJECT_ID=income-expenses-by-manus
           OCR_PROVIDER=google
-          IAPP_API_KEY=${{ secrets.IAPP_API_KEY }}
-          APPMAN_API_KEY=${{ secrets.APPMAN_API_KEY }}
+        # 🔒 ดึงความลับจาก Google Cloud Secret Manager (ต้องสร้างใน GCP ก่อน)
+        # รูปแบบ: <ENV_VAR>=<SECRET_NAME>:latest
+        secrets: |
+          GOOGLE_SERVICE_ACCOUNT_JSON=GOOGLE_SERVICE_ACCOUNT_JSON:latest
+          ADMIN_API_KEY=ADMIN_API_KEY:latest
+          DIALOGFLOW_WEBHOOK_SECRET=DIALOGFLOW_WEBHOOK_SECRET:latest
+          GOOGLE_SPREADSHEET_ID=GOOGLE_SPREADSHEET_ID:latest
+          MONTHLY_SPREADSHEET_ID=MONTHLY_SPREADSHEET_ID:latest
+          DEBT_SPREADSHEET_ID=DEBT_SPREADSHEET_ID:latest
+          GOOGLE_SHEET_NAME=GOOGLE_SHEET_NAME:latest
+          GOOGLE_INVEST_SHEET_NAME=GOOGLE_INVEST_SHEET_NAME:latest
+          GOOGLE_BOTDASHBOARD_SHEET_NAME=GOOGLE_BOTDASHBOARD_SHEET_NAME:latest
+          TELEGRAM_TOKEN=TELEGRAM_TOKEN:latest
+          MY_TELEGRAM_CHAT_ID=MY_TELEGRAM_CHAT_ID:latest
+          OPENAI_API_KEY=OPENAI_API_KEY:latest
+          IAPP_API_KEY=IAPP_API_KEY:latest
+          APPMAN_API_KEY=APPMAN_API_KEY:latest
 
     - name: 📊 Deployment Complete - Health Checks Available
       run: |
