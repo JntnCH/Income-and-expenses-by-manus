@@ -19,7 +19,7 @@ env:
   IMAGE_NAME: income-expense-docker
   # 👇 ค่า identifier เหล่านี้ไม่ใช่ความลับ ใส่ hardcode ได้ปลอดภัย
   # ดู PROJECT_NUMBER ได้จาก: gcloud projects describe income-expenses-by-manus --format='value(projectNumber)'
-  WIF_PROVIDER: principal://iam.googleapis.com/projects/274212739997/locations/global/workloadIdentityPools/workload-github-to-cloudrun/subject/SUBJECT_ATTRIBUTE_VALUE
+  WIF_PROVIDER: projects/274212739997/locations/global/workloadIdentityPools/workload-github-to-cloudrun/providers/github-provider
   WIF_SERVICE_ACCOUNT: income-expenses-by-manus@appspot.gserviceaccount.com
 
 jobs:
