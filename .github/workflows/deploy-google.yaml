@@ -5,6 +5,11 @@ on:
     branches:
       - main
 
+# สำคัญ: ต้องมี permissions นี้เพื่อให้ GitHub ออก OIDC token ได้
+permissions:
+  contents: read
+  id-token: write
+
 env:
   PROJECT_ID: income-expenses-by-manus
   REGION: asia-southeast1
@@ -12,6 +17,10 @@ env:
   GAR_LOCATION: asia-southeast3
   REPOSITORY: income-expense-frombot
   IMAGE_NAME: income-expense-frombot
+  # 👇 ค่า identifier เหล่านี้ไม่ใช่ความลับ ใส่ hardcode ได้ปลอดภัย
+  # ดู PROJECT_NUMBER ได้จาก: gcloud projects describe income-expenses-by-manus --format='value(projectNumber)'
+  WIF_PROVIDER: principal://iam.googleapis.com/projects/274212739997/locations/global/workloadIdentityPools/workload-github-to-cloudrun/subject/SUBJECT_ATTRIBUTE_VALUE
+  WIF_SERVICE_ACCOUNT: income-expenses-by-manus@appspot.gserviceaccount.com
 
 jobs:
   deploy:
@@ -20,10 +29,15 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Authenticate to Google Cloud
+    # ✅ ไม่ใช้ secrets.GCP_SA_KEY อีกต่อไป
+    # GitHub ส่ง OIDC token → GCP แลกเป็น short-lived token ของ Service Account
+    # ไม่มี key ค้างอยู่ที่ไหนเลย ไม่ต้อง rotate key
+    - name: Authenticate to Google Cloud (Workload Identity Federation)
       uses: google-github-actions/auth@v3
       with:
-        credentials_json: ${{ secrets.GCP_SA_KEY }}
+        project_id: ${{ env.PROJECT_ID }}
+        workload_identity_provider: ${{ env.WIF_PROVIDER }}
+        service_account: ${{ env.WIF_SERVICE_ACCOUNT }}
 
     - name: Set up Cloud SDK
       uses: google-github-actions/setup-gcloud@v3
@@ -43,6 +57,8 @@ jobs:
         service: ${{ env.SERVICE_NAME }}
         region: ${{ env.REGION }}
         image: ${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+        # ✅ แนบ SA ให้ container ใช้ ADC แทน JSON key (ไม่ต้องมี GOOGLE_SERVICE_ACCOUNT_JSON)
+        service_account: app-runtime-sa@${{ env.PROJECT_ID }}.iam.gserviceaccount.com
         # ✅ Allow Dialogflow to call webhook
         flags: --allow-unauthenticated --port=8080 --min-instances=0
         env_vars: |
@@ -53,7 +69,7 @@ jobs:
         # 🔒 ดึงความลับจาก Google Cloud Secret Manager (ต้องสร้างใน GCP ก่อน)
         # รูปแบบ: <ENV_VAR>=<SECRET_NAME>:latest
         secrets: |
-          GOOGLE_SERVICE_ACCOUNT_JSON=GOOGLE_SERVICE_ACCOUNT_JSON:latest
+          # ❌ ลบ GOOGLE_SERVICE_ACCOUNT_JSON ออก — ใช้ ADC ผ่าน service_account แทน
           ADMIN_API_KEY=ADMIN_API_KEY:latest
           DIALOGFLOW_WEBHOOK_SECRET=DIALOGFLOW_WEBHOOK_SECRET:latest
           GOOGLE_SPREADSHEET_ID=GOOGLE_SPREADSHEET_ID:latest
