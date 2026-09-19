@@ -51,7 +51,7 @@ jobs:
         service: ${{ env.SERVICE_NAME }}
         region: ${{ env.REGION }}
         image: ${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
-        service_account: app-runtime-sa@${{ env.PROJECT_ID }}.iam.gserviceaccount.com
+        service_account: income-expenses-by-manus@appspot.gserviceaccount.com
         flags: --allow-unauthenticated --port=8080 --min-instances=0
         env_vars: |
           NODE_ENV=production
