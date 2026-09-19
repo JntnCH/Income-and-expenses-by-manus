@@ -19,9 +19,9 @@ env:
   IMAGE_NAME: income-expense-frombot
   # 👇 ค่า identifier เหล่านี้ไม่ใช่ความลับ ใส่ hardcode ได้ปลอดภัย
   # ดู PROJECT_NUMBER ได้จาก: gcloud projects describe income-expenses-by-manus --format='value(projectNumber)'
+  # ✅ แก้ไขให้ถูกต้อง:
   WIF_PROVIDER: projects/274212739997/locations/global/workloadIdentityPools/workload-github-to-cloudrun/providers/github-provider
-  github-providerWIF_SERVICE_ACCOUNT: income-expenses-by-manus@appspot.gserviceaccount.com
-
+  WIF_SERVICE_ACCOUNT: income-expenses-by-manus@appspot.gserviceaccount.com
 jobs:
   deploy:
     runs-on: ubuntu-latest
