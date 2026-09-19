@@ -1,34 +1,101 @@
-    - name: 🚀 Deploy to Cloud Run
+name: Deploy to Google Cloud Run (Production)
+
+on:
+  push:
+    branches:
+      - main
+
+# สำคัญ: ต้องมี permissions นี้เพื่อให้ GitHub ออก OIDC token ได้
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  PROJECT_ID: income-expenses-by-manus
+  REGION: asia-southeast1
+  SERVICE_NAME: income-expense-frombot
+  GAR_LOCATION: asia-southeast3
+  REPOSITORY: income-expense-docker
+  IMAGE_NAME: income-expense-docker
+  # 👇 ค่า identifier เหล่านี้ไม่ใช่ความลับ ใส่ hardcode ได้ปลอดภัย
+  # ดู PROJECT_NUMBER ได้จาก: gcloud projects describe income-expenses-by-manus --format='value(projectNumber)'
+  WIF_PROVIDER: principal://iam.googleapis.com/projects/274212739997/locations/global/workloadIdentityPools/workload-github-to-cloudrun/subject/SUBJECT_ATTRIBUTE_VALUE
+  WIF_SERVICE_ACCOUNT: income-expenses-by-manus@appspot.gserviceaccount.com
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    # ✅ ไม่ใช้ secrets.GCP_SA_KEY อีกต่อไป
+    # GitHub ส่ง OIDC token → GCP แลกเป็น short-lived token ของ Service Account
+    # ไม่มี key ค้างอยู่ที่ไหนเลย ไม่ต้อง rotate key
+    - name: Authenticate to Google Cloud (Workload Identity Federation)
+      uses: google-github-actions/auth@v3
+      with:
+        project_id: ${{ env.PROJECT_ID }}
+        workload_identity_provider: ${{ env.WIF_PROVIDER }}
+        service_account: ${{ env.WIF_SERVICE_ACCOUNT }}
+
+    - name: Set up Cloud SDK
+      uses: google-github-actions/setup-gcloud@v3
+
+    - name: Configure Docker for GCP Artifact Registry
+      run: |
+        gcloud auth configure-docker ${{ env.GAR_LOCATION }}-docker.pkg.dev
+
+    - name: Build and Push Docker Image
+      run: |
+        docker build -t ${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} .
+        docker push ${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+
+    - name: Deploy to Cloud Run
       uses: google-github-actions/deploy-cloudrun@v3
       with:
         service: ${{ env.SERVICE_NAME }}
         region: ${{ env.REGION }}
         image: ${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
-        flags: >-
-          --allow-unauthenticated
-          --port=8080
-          --min-instances=0
-          --service-account="income-expenses-by-manus@appspot.gserviceaccount.com"
+        # ✅ แนบ SA ให้ container ใช้ ADC แทน JSON key (ไม่ต้องมี GOOGLE_SERVICE_ACCOUNT_JSON)
+        service_account: app-runtime-sa@${{ env.PROJECT_ID }}.iam.gserviceaccount.com
+        # ✅ Allow Dialogflow to call webhook
+        flags: --allow-unauthenticated --port=8080 --min-instances=0
         env_vars: |
           NODE_ENV=production
           CORS_ORIGINS=https://income-and-expenses-by-manus.vercel.app,https://income-expense-docker-274212739997.asia-southeast3.run.app
           DIALOGFLOW_PROJECT_ID=income-expenses-by-manus
           OCR_PROVIDER=google
-          GOOGLE_SHEET_NAME=GOOGLE_SHEET_NAME
-          GOOGLE_INVEST_SHEET_NAME=GOOGLE_INVEST_SHEET_NAME
-          GOOGLE_BOTDASHBOARD_SHEET_NAME=GOOGLE_BOTDASHBOARD_SHEET_NAME
+        # 🔒 ดึงความลับจาก Google Cloud Secret Manager (ต้องสร้างใน GCP ก่อน)
+        # รูปแบบ: <ENV_VAR>=<SECRET_NAME>:latest
         secrets: |
+          # ❌ ลบ GOOGLE_SERVICE_ACCOUNT_JSON ออก — ใช้ ADC ผ่าน service_account แทน
           ADMIN_API_KEY=ADMIN_API_KEY:latest
           DIALOGFLOW_WEBHOOK_SECRET=DIALOGFLOW_WEBHOOK_SECRET:latest
           GOOGLE_SPREADSHEET_ID=GOOGLE_SPREADSHEET_ID:latest
           MONTHLY_SPREADSHEET_ID=MONTHLY_SPREADSHEET_ID:latest
           DEBT_SPREADSHEET_ID=DEBT_SPREADSHEET_ID:latest
+          GOOGLE_SHEET_NAME=GOOGLE_SHEET_NAME:latest
+          GOOGLE_INVEST_SHEET_NAME=GOOGLE_INVEST_SHEET_NAME:latest
+          GOOGLE_BOTDASHBOARD_SHEET_NAME=GOOGLE_BOTDASHBOARD_SHEET_NAME:latest
           TELEGRAM_TOKEN=TELEGRAM_TOKEN:latest
           MY_TELEGRAM_CHAT_ID=MY_TELEGRAM_CHAT_ID:latest
           OPENAI_API_KEY=OPENAI_API_KEY:latest
           IAPP_API_KEY=IAPP_API_KEY:latest
           APPMAN_API_KEY=APPMAN_API_KEY:latest
 
-    - name: 📊 Deployment Complete
+    - name: 📊 Deployment Complete - Health Checks Available
       run: |
         echo "✅ Cloud Run service deployed successfully!"
+        echo ""
+        echo "📍 Service Details:"
+        echo "  • Service: ${{ env.SERVICE_NAME }}"
+        echo "  • Region: ${{ env.REGION }}"
+        echo "  • Artifact Registry: ${{ env.GAR_LOCATION }}-docker.pkg.dev"
+        echo "  • Image: ${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
+        echo ""
+        echo "📊 Available Health Check Endpoints:"
+        echo "  • GET /health - Basic health check (Docker HEALTHCHECK)"
+        echo "  • GET /health/ready - Readiness probe (all dependencies check)"
+        echo "  • GET /health/startup - Startup check (full diagnostic)"
+        echo "  • GET /health/live - Liveness probe (minimal check)"
